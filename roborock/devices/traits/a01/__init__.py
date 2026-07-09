@@ -20,9 +20,12 @@ cache state internally.
 """
 
 import json
+import logging
 from collections.abc import Callable
 from datetime import time
 from typing import Any
+
+from roborock.exceptions import RoborockException
 
 from roborock.data import DyadProductInfo, DyadSndState, HomeDataProduct, RoborockCategory
 from roborock.data.dyad.dyad_code_mappings import (
@@ -38,20 +41,27 @@ from roborock.data.dyad.dyad_code_mappings import (
 )
 from roborock.data.zeo.zeo_code_mappings import (
     ZeoDetergentType,
+    ZeoDryAndCare,
+    ZeoDryerStartError,
+    ZeoDryingMethod,
     ZeoDryingMode,
     ZeoError,
     ZeoMode,
     ZeoProgram,
     ZeoRinse,
+    ZeoSoak,
     ZeoSoftenerType,
     ZeoSpin,
     ZeoState,
+    ZeoSteamVolume,
     ZeoTemperature,
 )
 from roborock.devices.rpc.a01_channel import send_decoded_command
 from roborock.devices.traits import Trait
 from roborock.devices.transport.mqtt_channel import MqttChannel
 from roborock.roborock_message import RoborockDyadDataProtocol, RoborockZeoProtocol
+
+_LOGGER = logging.getLogger(__name__)
 
 __init__ = [
     "DyadApi",
@@ -101,6 +111,22 @@ ZEO_PROTOCOL_ENTRIES: dict[RoborockZeoProtocol, Callable] = {
     RoborockZeoProtocol.TIMES_AFTER_CLEAN: lambda val: int(val),
     RoborockZeoProtocol.DETERGENT_EMPTY: lambda val: bool(val),
     RoborockZeoProtocol.SOFTENER_EMPTY: lambda val: bool(val),
+    RoborockZeoProtocol.DIRT_DETECTION_STATUS: lambda val: int(val),
+    RoborockZeoProtocol.TOTAL_TIME: lambda val: int(val),
+    RoborockZeoProtocol.FEATURE_BITS: lambda val: int(val),
+    RoborockZeoProtocol.SMART_HOSTING_WAITED_TIME: lambda val: int(val),
+    RoborockZeoProtocol.FLUFF_CLEANED: lambda val: bool(val),
+    RoborockZeoProtocol.IS_NEED_FLUFF_CLEAN: lambda val: bool(val),
+    RoborockZeoProtocol.PANEL_PROGRAM_PARAMS_SET_RESULT: lambda val: int(val),
+    RoborockZeoProtocol.DEVICE_BOUND: lambda val: bool(val),
+    RoborockZeoProtocol.CLOTH_PUT_IN: lambda val: bool(val),
+    RoborockZeoProtocol.CLOTH_READY_TO_DRY_COUNT_DOWN: lambda val: int(val),
+    RoborockZeoProtocol.START_DRYER_ERROR: lambda val: ZeoDryerStartError(val).name,
+    RoborockZeoProtocol.DOORLOCK_STATE: lambda val: bool(val),
+    RoborockZeoProtocol.DEFAULT_SETTING: lambda val: int(val),
+    RoborockZeoProtocol.LIGHT_SETTING: lambda val: bool(val),
+    RoborockZeoProtocol.DETERGENT_VOLUME: lambda val: int(val),
+    RoborockZeoProtocol.SOFTENER_VOLUME: lambda val: int(val),
     # read-write
     RoborockZeoProtocol.MODE: lambda val: ZeoMode(val).name,
     RoborockZeoProtocol.PROGRAM: lambda val: ZeoProgram(val).name,
@@ -111,6 +137,33 @@ ZEO_PROTOCOL_ENTRIES: dict[RoborockZeoProtocol, Callable] = {
     RoborockZeoProtocol.DETERGENT_TYPE: lambda val: ZeoDetergentType(val).name,
     RoborockZeoProtocol.SOFTENER_TYPE: lambda val: ZeoSoftenerType(val).name,
     RoborockZeoProtocol.SOUND_SET: lambda val: bool(val),
+    RoborockZeoProtocol.DIRT_DETECTION_SWITCH: lambda val: bool(val),
+    RoborockZeoProtocol.SOAK: lambda val: ZeoSoak(val).name,
+    RoborockZeoProtocol.SILENT_MODE_ON: lambda val: bool(val),
+    RoborockZeoProtocol.SILENT_MODE_START_TIME: lambda val: int(val),
+    RoborockZeoProtocol.SILENT_MODE_END_TIME: lambda val: int(val),
+    RoborockZeoProtocol.DRY_CARE_MODE: lambda val: ZeoDryAndCare(val).name,
+    RoborockZeoProtocol.WASH_DRY_LINKED: lambda val: bool(val),
+    RoborockZeoProtocol.DRYING_METHOD: lambda val: ZeoDryingMethod(val).name,
+    RoborockZeoProtocol.STEAM_VOLUME: lambda val: ZeoSteamVolume(val).name,
+    RoborockZeoProtocol.ION_DEODORIZATION: lambda val: bool(val),
+    RoborockZeoProtocol.UV_LIGHT: lambda val: bool(val),
+    RoborockZeoProtocol.SMART_HOSTING: lambda val: bool(val),
+    RoborockZeoProtocol.SMART_HOSTING_TIME: lambda val: int(val),
+    RoborockZeoProtocol.SOFTENER_EXPANSION_TYPE: lambda val: int(val),
+    RoborockZeoProtocol.DETERGENT_EXPANSION_TYPE: lambda val: int(val),
+    RoborockZeoProtocol.SMILE_LIGHT_STATUS: lambda val: bool(val),
+    RoborockZeoProtocol.POWER_LIGHT: lambda val: bool(val),
+    RoborockZeoProtocol.PANEL_PROGRAM_PARAMS_SET: lambda val: int(val),
+    RoborockZeoProtocol.PANEL_TIMING_PROGRAM_PARAMS: lambda val: int(val),
+    RoborockZeoProtocol.STEAM_CARE_TIME: lambda val: int(val),
+    RoborockZeoProtocol.WIFI_LINKAGE_RESET: lambda val: int(val),
+    RoborockZeoProtocol.CUSTOM_PROGRAM_CLEANING_TIME: lambda val: int(val),
+    RoborockZeoProtocol.SAVE_ADAPTED_CLOUD_PROGRAM: lambda val: int(val),
+    RoborockZeoProtocol.CHILD_LOCK: lambda val: bool(val),
+    RoborockZeoProtocol.DETERGENT_SET: lambda val: bool(val),
+    RoborockZeoProtocol.SOFTENER_SET: lambda val: bool(val),
+    RoborockZeoProtocol.APP_AUTHORIZATION: lambda val: bool(val),
 }
 
 
@@ -176,7 +229,43 @@ class ZeoApi(Trait):
 
     async def set_value(self, protocol: RoborockZeoProtocol, value: Any) -> dict[RoborockZeoProtocol, Any]:
         """Set a value for a specific protocol on the device."""
-        params = {protocol: value}
+        params: dict[RoborockZeoProtocol, Any] = {protocol: value}
+        if protocol == RoborockZeoProtocol.START and value == 1:
+            _LOGGER.debug("Start command detected, querying current device state")
+            try:
+                current = await send_decoded_command(
+                    self._channel,
+                    {
+                        RoborockZeoProtocol.ID_QUERY: [
+                            RoborockZeoProtocol.MODE,
+                            RoborockZeoProtocol.PROGRAM,
+                            RoborockZeoProtocol.TEMP,
+                            RoborockZeoProtocol.RINSE_TIMES,
+                            RoborockZeoProtocol.SPIN_LEVEL,
+                            RoborockZeoProtocol.DRYING_MODE,
+                        ]
+                    },
+                    value_encoder=json.dumps,
+                )
+                for dp, fallback in (
+                    (RoborockZeoProtocol.MODE, 1),
+                    (RoborockZeoProtocol.PROGRAM, 1),
+                    (RoborockZeoProtocol.TEMP, None),
+                    (RoborockZeoProtocol.RINSE_TIMES, None),
+                    (RoborockZeoProtocol.SPIN_LEVEL, None),
+                    (RoborockZeoProtocol.DRYING_MODE, None),
+                ):
+                    if dp in current:
+                        params[dp] = current[dp]
+                    elif fallback is not None:
+                        params[dp] = fallback
+            except RoborockException:
+                _LOGGER.warning(
+                    "Failed to query device state before start, using defaults",
+                    exc_info=True,
+                )
+                params[RoborockZeoProtocol.MODE] = 1
+                params[RoborockZeoProtocol.PROGRAM] = 1
         return await send_decoded_command(self._channel, params, value_encoder=lambda x: x)
 
 

@@ -371,7 +371,7 @@ class RoborockMqttSession(MqttSession):
             client = self._client
         try:
             with self._diagnostics.timer("publish"):
-                await client.publish(topic, message)
+                await client.publish(topic, message, qos=1)
         except MqttError as err:
             raise MqttSessionException(f"Error publishing message: {err}") from err
 

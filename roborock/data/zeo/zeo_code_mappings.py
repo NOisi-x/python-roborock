@@ -6,6 +6,7 @@ class ZeoMode(RoborockEnum):
     wash = 1
     wash_and_dry = 2
     dry = 3
+    treatment = 4
 
 
 class ZeoState(RoborockEnum):
@@ -19,8 +20,16 @@ class ZeoState(RoborockEnum):
     cooling = 8
     under_delay_start = 9
     done = 10
-    aftercare = 12
-    waiting_for_aftercare = 13
+    updating = 11
+    smart_hosting = 12
+    smart_hosting_waiting = 13
+    steam_caring = 14
+    descaling = 15
+    cloth_ready = 16
+    waiting_for_drying = 17
+    pre_heating = 18
+    pre_heat_complete = 19
+    in_care = 20
 
 
 class ZeoProgram(RoborockEnum):
@@ -68,6 +77,7 @@ class ZeoSoak(RoborockEnum):
     medium = 2
     high = 3
     max = 4
+    very_max = 5  # 30 minutes
 
 
 class ZeoTemperature(RoborockEnum):
@@ -140,3 +150,32 @@ class ZeoError(RoborockEnum):
     drying_error_water_flow = 17  # Check for normal water flow
     drying_error_restart = 18  # Restart the washer and try again
     spin_error = 19  # re-arrange clothes
+
+
+class ZeoDryingMethod(RoborockEnum):
+    l1 = 1
+    l2 = 2
+    l3 = 3
+
+
+class ZeoSteamVolume(RoborockEnum):
+    none = 0
+    low = 1
+    medium = 2
+    high = 3
+    max = 4
+
+
+class ZeoDryAndCare(RoborockEnum):
+    soft = 1
+    normal = 2
+
+
+class ZeoDryerStartError(RoborockEnum):
+    dryer_running = 1
+    dryer_error = 2
+    dryer_done = 3
+    dryer_waiting_hosting = 4
+    dryer_smart_hosting = 5
+    dryer_countdown = 6
+    dryer_network_fail = 7
