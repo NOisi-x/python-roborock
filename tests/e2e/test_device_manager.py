@@ -226,6 +226,8 @@ async def test_v1_device(
     test_topic = TEST_TOPIC_FORMAT.format(duid="abc123")
     mqtt_responses: list[bytes] = [
         *MQTT_DEFAULT_RESPONSES,
+        # PUBACK for the QoS 1 publish (MID=2)
+        mqtt_packet.gen_puback(mid=2),
         # ACK the GET_NETWORK_INFO call. id is deterministic based on deterministic_message_fixtures
         mqtt_packet.gen_publish(
             test_topic, mid=2, payload=response_builder.build_v1_rpc(data={"id": 9090, "result": NETWORK_INFO})
@@ -335,6 +337,8 @@ async def test_l01_device(
     test_topic = TEST_TOPIC_FORMAT.format(duid="abc123")
     mqtt_responses: list[bytes] = [
         *MQTT_DEFAULT_RESPONSES,
+        # PUBACK for the QoS 1 publish (MID=2)
+        mqtt_packet.gen_puback(mid=2),
         # ACK the GET_NETWORK_INFO call. id is deterministic based on deterministic_message_fixtures
         mqtt_packet.gen_publish(
             test_topic, mid=2, payload=mqtt_response_builder.build_v1_rpc(data={"id": 9090, "result": NETWORK_INFO})
@@ -466,10 +470,14 @@ async def test_q7_device(
     test_topic = TEST_TOPIC_FORMAT.format(duid="device-id-q7")
     mqtt_responses: list[bytes] = [
         *MQTT_DEFAULT_RESPONSES,
+        # PUBACK for the QoS 1 query publish (MID=2)
+        mqtt_packet.gen_puback(mid=2),
         # ACK the Query status call sent below. id is deterministic based on deterministic_message_fixtures
         mqtt_packet.gen_publish(
             test_topic, mid=2, payload=response_builder.build_b01_q7_rpc({"status": 2}, msg_id=9090)
         ),
+        # PUBACK for the QoS 1 start clean publish (MID=3)
+        mqtt_packet.gen_puback(mid=3),
         # ACK the start clean call sent below. id is deterministic based on deterministic_message_fixtures
         mqtt_packet.gen_publish(test_topic, mid=2, payload=response_builder.build_b01_q7_rpc("ok", msg_id=9093)),
     ]
@@ -527,6 +535,8 @@ async def test_a01_device(
     test_topic = TEST_TOPIC_FORMAT.format(duid="zeo_duid")
     mqtt_responses: list[bytes] = [
         *MQTT_DEFAULT_RESPONSES,
+        # PUBACK for the QoS 1 publish (MID=2, matches the query publish below)
+        mqtt_packet.gen_puback(mid=2),
         # ACK the Query state call sent below. id is deterministic based on deterministic_message_fixtures
         mqtt_packet.gen_publish(test_topic, mid=2, payload=response_builder.build_a01_rpc({"203": 6})),
     ]
