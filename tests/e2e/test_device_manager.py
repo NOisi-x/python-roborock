@@ -17,7 +17,6 @@ import pytest
 import syrupy
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
-from freezegun import freeze_time
 
 from roborock.data.b01_q7 import WorkStatusMapping
 from roborock.data.b01_q10.b01_q10_code_mappings import B01_Q10_DP
@@ -513,8 +512,8 @@ async def test_q7_device(
         )
     ],
 )
-@freeze_time("2025-01-20T12:00:00", tick=True)
 async def test_a01_device(
+    monkeypatch: Any,
     mock_rest: Any,
     push_mqtt_response: Callable[[bytes], None],
     log: CapturedRequestLog,
@@ -523,6 +522,8 @@ async def test_a01_device(
     snapshot: syrupy.SnapshotAssertion,
 ) -> None:
     """Test the device manager end to end flow with an A01 device."""
+    # Use a fixed timestamp so the MQTT payload snapshot is deterministic.
+    monkeypatch.setattr("roborock.protocols.a01_protocol.time.time", lambda: 1755750947.0)
     # Prepare MQTT requests
     response_builder = ResponseBuilder()
     response_builder.version = A01_VERSION
