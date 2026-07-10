@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 import syrupy
 from Crypto.Cipher import AES
+from freezegun import freeze_time
 from Crypto.Util.Padding import pad
 
 from roborock.data.b01_q7 import WorkStatusMapping
@@ -512,6 +513,7 @@ async def test_q7_device(
         )
     ],
 )
+@freeze_time("2025-01-20T12:00:00")
 async def test_a01_device(
     mock_rest: Any,
     push_mqtt_response: Callable[[bytes], None],
