@@ -30,6 +30,7 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockDyadDataProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
+    qos: int = 0,
 ) -> dict[RoborockDyadDataProtocol, Any]: ...
 
 
@@ -38,6 +39,7 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockZeoProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
+    qos: int = 0,
 ) -> dict[RoborockZeoProtocol, Any]: ...
 
 
