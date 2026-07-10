@@ -361,8 +361,14 @@ class RoborockMqttSession(MqttSession):
 
         return delayed_unsub
 
-    async def publish(self, topic: str, message: bytes) -> None:
-        """Publish a message on the topic."""
+    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
+        """Publish a message on the topic.
+
+        Args:
+            topic: The MQTT topic to publish to.
+            message: The message payload.
+            qos: The MQTT QoS level. Defaults to 0.
+        """
         _LOGGER.debug("Sending message to topic %s: %s", topic, message)
         client: aiomqtt.Client
         async with self._client_lock:
@@ -371,7 +377,7 @@ class RoborockMqttSession(MqttSession):
             client = self._client
         try:
             with self._diagnostics.timer("publish"):
-                await client.publish(topic, message, qos=1)
+                await client.publish(topic, message, qos=qos)
         except MqttError as err:
             raise MqttSessionException(f"Error publishing message: {err}") from err
 
@@ -417,13 +423,13 @@ class LazyMqttSession(MqttSession):
         await self._maybe_start()
         return await self._session.subscribe(device_id, callback)
 
-    async def publish(self, topic: str, message: bytes) -> None:
+    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
         """Publish a message on the specified topic.
 
         This will raise an exception if the message could not be sent.
         """
         await self._maybe_start()
-        return await self._session.publish(topic, message)
+        return await self._session.publish(topic, message, qos=qos)
 
     async def close(self) -> None:
         """Cancels the mqtt loop.

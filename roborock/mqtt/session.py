@@ -76,10 +76,15 @@ class MqttSession(ABC):
         """
 
     @abstractmethod
-    async def publish(self, topic: str, message: bytes) -> None:
+    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
         """Publish a message on the specified topic.
 
         This will raise an exception if the message could not be sent.
+
+        Args:
+            topic: The MQTT topic to publish to.
+            message: The message payload.
+            qos: The MQTT QoS level (0, 1, or 2). Defaults to 0.
         """
 
     @abstractmethod

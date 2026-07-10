@@ -25,8 +25,6 @@ from collections.abc import Callable
 from datetime import time
 from typing import Any
 
-from roborock.exceptions import RoborockException
-
 from roborock.data import DyadProductInfo, DyadSndState, HomeDataProduct, RoborockCategory
 from roborock.data.dyad.dyad_code_mappings import (
     DyadBrushSpeed,
@@ -59,6 +57,7 @@ from roborock.data.zeo.zeo_code_mappings import (
 from roborock.devices.rpc.a01_channel import send_decoded_command
 from roborock.devices.traits import Trait
 from roborock.devices.transport.mqtt_channel import MqttChannel
+from roborock.exceptions import RoborockException
 from roborock.roborock_message import RoborockDyadDataProtocol, RoborockZeoProtocol
 
 _LOGGER = logging.getLogger(__name__)
@@ -266,7 +265,10 @@ class ZeoApi(Trait):
                 )
                 params[RoborockZeoProtocol.MODE] = 1
                 params[RoborockZeoProtocol.PROGRAM] = 1
-        return await send_decoded_command(self._channel, params, value_encoder=lambda x: x)
+        # START commands require QoS 1; all other A01 commands use default QoS 0.
+        return await send_decoded_command(
+            self._channel, params, value_encoder=lambda x: x, qos=1 if protocol == RoborockZeoProtocol.START else 0
+        )
 
 
 def create(product: HomeDataProduct, mqtt_channel: MqttChannel) -> DyadApi | ZeoApi:

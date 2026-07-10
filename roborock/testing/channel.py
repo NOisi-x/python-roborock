@@ -93,13 +93,16 @@ class FakeChannel(Channel):
         """Return true if locally connected."""
         return self._is_connected and self._is_local
 
-    async def _publish(self, message: RoborockMessage) -> None:
+    async def _publish(self, message: RoborockMessage, qos: int = 0) -> None:
         """Default publish implementation.
 
         Records the message in ``published_messages`` and, if
         ``response_queue`` is non-empty, pops the first response and
         delivers it to all current subscribers (simulating a
         request/response round-trip).
+
+        The ``qos`` parameter is accepted for compatibility with
+        ``MqttChannel.publish`` but not simulated by the fake channel.
         """
         self.published_messages.append(message)
         if self.publish_side_effect:

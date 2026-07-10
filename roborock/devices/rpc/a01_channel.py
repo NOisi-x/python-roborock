@@ -45,8 +45,16 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockDyadDataProtocol, Any] | dict[RoborockZeoProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
+    qos: int = 0,
 ) -> dict[RoborockDyadDataProtocol, Any] | dict[RoborockZeoProtocol, Any]:
-    """Send a command on the MQTT channel and get a decoded response."""
+    """Send a command on the MQTT channel and get a decoded response.
+
+    Args:
+        mqtt_channel: The MQTT channel to send the command on.
+        params: The parameters to send.
+        value_encoder: A function to encode the values of the dictionary.
+        qos: The MQTT QoS level (0, 1, or 2). Defaults to 0.
+    """
     _LOGGER.debug("Sending MQTT command: %s", params)
     roborock_message = encode_mqtt_payload(params, value_encoder)
 
@@ -54,7 +62,7 @@ async def send_decoded_command(
     # block waiting for a response. Queries are handled below.
     param_values = {int(k): v for k, v in params.items()}
     if not (query_values := param_values.get(_ID_QUERY)):
-        await mqtt_channel.publish(roborock_message)
+        await mqtt_channel.publish(roborock_message, qos=qos)
         return {}
 
     # Merge any results together than contain the requested data. This
