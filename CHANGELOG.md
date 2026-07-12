@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v5.28.1 (2026-07-12)
+
+### Bug Fixes
+
+- Correct some dock mapping ([#872](https://github.com/Python-roborock/python-roborock/pull/872),
+  [`9e95992`](https://github.com/Python-roborock/python-roborock/commit/9e95992fcfceb70a0e73c86dc819cecc6dc572d1))
+
+### Refactoring
+
+- Use stateful fakes and fixtures in integration tests
+  ([#868](https://github.com/Python-roborock/python-roborock/pull/868),
+  [`89c8074`](https://github.com/Python-roborock/python-roborock/commit/89c80743e2c560f36f56e0c17c85c0d14544f406))
+
+
 ## v5.28.0 (2026-07-08)
 
 ### Features
