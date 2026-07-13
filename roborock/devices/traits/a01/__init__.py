@@ -58,7 +58,6 @@ from roborock.devices.rpc.a01_channel import send_decoded_command
 from roborock.devices.traits import Trait
 from roborock.devices.transport.mqtt_channel import MqttChannel
 from roborock.mqtt.session import MqttQos
-from roborock.exceptions import RoborockException
 from roborock.roborock_message import RoborockDyadDataProtocol, RoborockZeoProtocol
 
 _LOGGER = logging.getLogger(__name__)
@@ -227,52 +226,50 @@ class ZeoApi(Trait):
         )
         return {protocol: convert_zeo_value(protocol, response.get(protocol)) for protocol in protocols}
 
+    # The DP IDs that must be bundled with START commands. These are the
+    # universally-supported core parameters common to all Zeo devices.
+    _START_PARAM_DPS: tuple[RoborockZeoProtocol, ...] = (
+        RoborockZeoProtocol.MODE,
+        RoborockZeoProtocol.PROGRAM,
+        RoborockZeoProtocol.TEMP,
+        RoborockZeoProtocol.RINSE_TIMES,
+        RoborockZeoProtocol.SPIN_LEVEL,
+        RoborockZeoProtocol.DRYING_MODE,
+    )
+
+    async def _get_current_params(
+        self,
+    ) -> dict[RoborockZeoProtocol, Any]:
+        """Query the device for the parameters needed by a START command.
+
+        Returns a dictionary of the current values for each start-relevant
+        DP.  If a DP is not returned by the device it is omitted from the
+        result.
+        """
+        current = await send_decoded_command(
+            self._channel,
+            {RoborockZeoProtocol.ID_QUERY: list(self._START_PARAM_DPS)},
+            value_encoder=json.dumps,
+        )
+        return {dp: current[dp] for dp in self._START_PARAM_DPS if dp in current}
+
     async def set_value(self, protocol: RoborockZeoProtocol, value: Any) -> dict[RoborockZeoProtocol, Any]:
         """Set a value for a specific protocol on the device."""
         params: dict[RoborockZeoProtocol, Any] = {protocol: value}
         if protocol == RoborockZeoProtocol.START and value == 1:
             _LOGGER.debug("Start command detected, querying current device state")
-            try:
-                current = await send_decoded_command(
-                    self._channel,
-                    {
-                        RoborockZeoProtocol.ID_QUERY: [
-                            RoborockZeoProtocol.MODE,
-                            RoborockZeoProtocol.PROGRAM,
-                            RoborockZeoProtocol.TEMP,
-                            RoborockZeoProtocol.RINSE_TIMES,
-                            RoborockZeoProtocol.SPIN_LEVEL,
-                            RoborockZeoProtocol.DRYING_MODE,
-                        ]
-                    },
-                    value_encoder=json.dumps,
-                )
-                for dp, fallback in (
-                    (RoborockZeoProtocol.MODE, 1),
-                    (RoborockZeoProtocol.PROGRAM, 1),
-                    (RoborockZeoProtocol.TEMP, None),
-                    (RoborockZeoProtocol.RINSE_TIMES, None),
-                    (RoborockZeoProtocol.SPIN_LEVEL, None),
-                    (RoborockZeoProtocol.DRYING_MODE, None),
-                ):
-                    if dp in current:
-                        params[dp] = current[dp]
-                    elif fallback is not None:
-                        params[dp] = fallback
-            except RoborockException:
-                _LOGGER.warning(
-                    "Failed to query device state before start, using defaults",
-                    exc_info=True,
-                )
-                params[RoborockZeoProtocol.MODE] = 1
-                params[RoborockZeoProtocol.PROGRAM] = 1
-        # START commands require AT_LEAST_ONCE; all other A01 commands use default AT_MOST_ONCE.
-        return await send_decoded_command(
-            self._channel,
-            params,
-            value_encoder=lambda x: x,
-            qos=MqttQos.AT_LEAST_ONCE if protocol == RoborockZeoProtocol.START else MqttQos.AT_MOST_ONCE,
-        )
+            current = await self._get_current_params()
+            for dp, fallback in (
+                (RoborockZeoProtocol.MODE, 1),
+                (RoborockZeoProtocol.PROGRAM, 1),
+            ):
+                if dp not in current:
+                    current[dp] = fallback
+            params.update(current)
+            return await send_decoded_command(
+                self._channel, params, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE
+            )
+        return await send_decoded_command(self._channel, params, value_encoder=lambda x: x)
 
 
 def create(product: HomeDataProduct, mqtt_channel: MqttChannel) -> DyadApi | ZeoApi:
