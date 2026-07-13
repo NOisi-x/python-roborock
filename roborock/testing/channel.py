@@ -5,7 +5,7 @@ subscription, and publishing logic at the message boundary. It acts as an
 in-memory replacement for `MqttChannel` and `LocalChannel` during testing.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -38,6 +38,9 @@ class FakeChannel(Channel):
       publish (useful for low-level RPC request/response testing).
     - **Push unsolicited messages**: Call ``channel.notify_subscribers(msg)``
       to simulate the device broadcasting a state change.
+    - **Intercept published messages**: Register a handler/callback via
+      ``channel.publish_handler = my_handler`` (e.g. stateful simulator)
+      to reactively process commands.
     """
 
     subscribe: Any
@@ -49,6 +52,11 @@ class FakeChannel(Channel):
         self.response_queue: list[RoborockMessage] = []
         self._is_connected = False
         self._is_local = is_local
+
+        # A callback to intercept published messages (e.g., bound simulator handler).
+        # Can be either synchronous or asynchronous: Callable[[RoborockMessage], Awaitable[Any]].
+        # By default, routes to self._default_publish_handler to handle the response_queue.
+        self.publish_handler: Callable[[RoborockMessage], Awaitable[Any]] | None = self._default_publish_handler
 
         # Set this to an exception instance to make the next publish raise it.
         # This is a convenience shortcut; callers can also replace
@@ -109,6 +117,12 @@ class FakeChannel(Channel):
             raise self.publish_side_effect
         if self.publish_handler:
             await self.publish_handler(message)
+
+    async def _default_publish_handler(self, message: RoborockMessage) -> None:
+        """Default handler that pops canned responses from response_queue."""
+        if self.response_queue:
+            response = self.response_queue.pop(0)
+            self.notify_subscribers(response)
 
     async def _subscribe(self, callback: Callable[[RoborockMessage], None]) -> Callable[[], None]:
         """Default subscribe implementation.
