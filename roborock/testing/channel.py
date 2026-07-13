@@ -75,6 +75,8 @@ class FakeChannel(Channel):
         self.close = MagicMock(side_effect=self._close)
 
         self.protocol_version = LocalProtocolVersion.V1
+        self.publish_handler: Callable[[RoborockMessage], None] | None = self._default_publish_handler
+
         self.restart = AsyncMock()
         self.health_manager = HealthManager(self.restart)
 
@@ -97,10 +99,7 @@ class FakeChannel(Channel):
     async def _publish(self, message: RoborockMessage, qos: MqttQos = MqttQos.AT_MOST_ONCE) -> None:
         """Default publish implementation.
 
-        Records the message in ``published_messages`` and, if
-        ``response_queue`` is non-empty, pops the first response and
-        delivers it to all current subscribers (simulating a
-        request/response round-trip).
+        Records the message in ``published_messages`` and executes ``publish_handler``.
 
         The ``qos`` parameter is accepted for compatibility with
         ``MqttChannel.publish`` but not simulated by the fake channel.
@@ -108,9 +107,8 @@ class FakeChannel(Channel):
         self.published_messages.append(message)
         if self.publish_side_effect:
             raise self.publish_side_effect
-        if self.response_queue:
-            response = self.response_queue.pop(0)
-            self.notify_subscribers(response)
+        if self.publish_handler:
+            await self.publish_handler(message)
 
     async def _subscribe(self, callback: Callable[[RoborockMessage], None]) -> Callable[[], None]:
         """Default subscribe implementation.
@@ -128,3 +126,21 @@ class FakeChannel(Channel):
         """
         for subscriber in list(self.subscribers):
             subscriber(message)
+
+    async def _default_publish_handler(self, message: RoborockMessage) -> None:
+        """Default handler that pops canned responses from response_queue."""
+        if self.response_queue:
+            response = self.response_queue.pop(0)
+            self.notify_subscribers(response)
+
+    def inject_error(self, exception: Exception) -> None:
+        """Inject a transient failure into all channel operations (publish, subscribe, connect)."""
+        self.publish.side_effect = exception
+        self.subscribe.side_effect = exception
+        self.connect.side_effect = exception
+
+    def clear_error(self) -> None:
+        """Restore default success behaviors on all channel operations."""
+        self.publish.side_effect = self._publish
+        self.subscribe.side_effect = self._subscribe
+        self.connect.side_effect = self._connect
