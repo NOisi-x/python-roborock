@@ -280,9 +280,7 @@ class ZeoApi(Trait):
         )
         for dp in self._START_PARAM_DPS:
             if dp not in current:
-                raise RoborockException(
-                    f"Device did not return required DP {dp.name} ({int(dp)})"
-                )
+                raise RoborockException(f"Device did not return required DP {dp.name} ({int(dp)})")
         return ZeoStartParams(
             mode=current[RoborockZeoProtocol.MODE],
             program=current[RoborockZeoProtocol.PROGRAM],
@@ -314,9 +312,7 @@ class ZeoApi(Trait):
         ):
             if val is not None:
                 dps[dp] = val
-        return await send_decoded_command(
-            self._channel, dps, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE
-        )
+        return await send_decoded_command(self._channel, dps, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE)
 
     async def set_value(self, protocol: RoborockZeoProtocol, value: Any) -> dict[RoborockZeoProtocol, Any]:
         """Set a value for a specific protocol on the device."""

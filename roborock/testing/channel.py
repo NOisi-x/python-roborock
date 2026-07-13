@@ -83,7 +83,6 @@ class FakeChannel(Channel):
         self.close = MagicMock(side_effect=self._close)
 
         self.protocol_version = LocalProtocolVersion.V1
-        self.publish_handler: Callable[[RoborockMessage], None] | None = self._default_publish_handler
 
         self.restart = AsyncMock()
         self.health_manager = HealthManager(self.restart)
@@ -140,12 +139,6 @@ class FakeChannel(Channel):
         """
         for subscriber in list(self.subscribers):
             subscriber(message)
-
-    async def _default_publish_handler(self, message: RoborockMessage) -> None:
-        """Default handler that pops canned responses from response_queue."""
-        if self.response_queue:
-            response = self.response_queue.pop(0)
-            self.notify_subscribers(response)
 
     def inject_error(self, exception: Exception) -> None:
         """Inject a transient failure into all channel operations (publish, subscribe, connect)."""

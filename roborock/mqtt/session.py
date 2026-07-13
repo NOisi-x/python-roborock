@@ -28,6 +28,7 @@ class MqttQos(IntEnum):
     EXACTLY_ONCE = 2
     """Guaranteed delivery with no duplicates. Broker sends PUBREC/PUBREL/PUBCOMP."""
 
+
 SessionUnauthorizedHook = Callable[[], None]
 
 

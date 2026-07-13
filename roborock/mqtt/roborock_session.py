@@ -361,9 +361,7 @@ class RoborockMqttSession(MqttSession):
 
         return delayed_unsub
 
-    async def publish(
-        self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE
-    ) -> None:
+    async def publish(self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE) -> None:
         """Publish a message on the topic.
 
         Args:
@@ -425,9 +423,7 @@ class LazyMqttSession(MqttSession):
         await self._maybe_start()
         return await self._session.subscribe(device_id, callback)
 
-    async def publish(
-        self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE
-    ) -> None:
+    async def publish(self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE) -> None:
         """Publish a message on the specified topic.
 
         This will raise an exception if the message could not be sent.
