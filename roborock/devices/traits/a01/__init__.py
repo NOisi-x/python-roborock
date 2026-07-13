@@ -243,15 +243,22 @@ class ZeoApi(Trait):
         """Query the device for the parameters needed by a START command.
 
         Returns a dictionary of the current values for each start-relevant
-        DP.  If a DP is not returned by the device it is omitted from the
-        result.
+        DP.  Raises :exc:`RoborockException` if any of the requested DPs
+        are not returned by the device.
         """
+        from roborock.exceptions import RoborockException
+
         current = await send_decoded_command(
             self._channel,
             {RoborockZeoProtocol.ID_QUERY: list(self._START_PARAM_DPS)},
             value_encoder=json.dumps,
         )
-        return {dp: current[dp] for dp in self._START_PARAM_DPS if dp in current}
+        for dp in self._START_PARAM_DPS:
+            if dp not in current:
+                raise RoborockException(
+                    f"Device did not return required DP {dp.name} ({int(dp)})"
+                )
+        return {dp: current[dp] for dp in self._START_PARAM_DPS}
 
     async def set_value(self, protocol: RoborockZeoProtocol, value: Any) -> dict[RoborockZeoProtocol, Any]:
         """Set a value for a specific protocol on the device."""
@@ -259,12 +266,6 @@ class ZeoApi(Trait):
         if protocol == RoborockZeoProtocol.START and value == 1:
             _LOGGER.debug("Start command detected, querying current device state")
             current = await self._get_current_params()
-            for dp, fallback in (
-                (RoborockZeoProtocol.MODE, 1),
-                (RoborockZeoProtocol.PROGRAM, 1),
-            ):
-                if dp not in current:
-                    current[dp] = fallback
             params.update(current)
             return await send_decoded_command(
                 self._channel, params, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE
