@@ -22,7 +22,7 @@ from roborock.callbacks import CallbackMap
 from roborock.diagnostics import Diagnostics, redact_topic_name
 
 from .health_manager import HealthManager
-from .session import MqttParams, MqttSession, MqttSessionException, MqttSessionUnauthorized
+from .session import MqttParams, MqttQos, MqttSession, MqttSessionException, MqttSessionUnauthorized
 
 _LOGGER = logging.getLogger(__name__)
 _MQTT_LOGGER = logging.getLogger(f"{__name__}.aiomqtt")
@@ -361,13 +361,15 @@ class RoborockMqttSession(MqttSession):
 
         return delayed_unsub
 
-    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
+    async def publish(
+        self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE
+    ) -> None:
         """Publish a message on the topic.
 
         Args:
             topic: The MQTT topic to publish to.
             message: The message payload.
-            qos: The MQTT QoS level. Defaults to 0.
+            qos: The MQTT QoS level. Defaults to AT_MOST_ONCE.
         """
         _LOGGER.debug("Sending message to topic %s: %s", topic, message)
         client: aiomqtt.Client
@@ -423,7 +425,9 @@ class LazyMqttSession(MqttSession):
         await self._maybe_start()
         return await self._session.subscribe(device_id, callback)
 
-    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
+    async def publish(
+        self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE
+    ) -> None:
         """Publish a message on the specified topic.
 
         This will raise an exception if the message could not be sent.

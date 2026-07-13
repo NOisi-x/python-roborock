@@ -3,12 +3,33 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import IntEnum
 
 from roborock.diagnostics import Diagnostics
 from roborock.exceptions import RoborockException
 from roborock.mqtt.health_manager import HealthManager
 
 DEFAULT_TIMEOUT = 30.0
+
+
+class MqttQos(IntEnum):
+    """MQTT Quality of Service levels.
+
+    Determines the delivery guarantee for published messages:
+
+    - AT_MOST_ONCE (0): Fire-and-forget. No acknowledgment required.
+    - AT_LEAST_ONCE (1): Guaranteed delivery with possible duplicates. Broker
+      sends PUBACK.
+    - EXACTLY_ONCE (2): Guaranteed delivery with no duplicates. Broker sends
+      PUBREC/PUBREL/PUBCOMP.
+
+    A01 devices (Zeo, Dyad) require ``AT_LEAST_ONCE`` for DP200 (start)
+    commands. Other protocol versions use ``AT_MOST_ONCE``.
+    """
+
+    AT_MOST_ONCE = 0
+    AT_LEAST_ONCE = 1
+    EXACTLY_ONCE = 2
 
 SessionUnauthorizedHook = Callable[[], None]
 
@@ -76,7 +97,7 @@ class MqttSession(ABC):
         """
 
     @abstractmethod
-    async def publish(self, topic: str, message: bytes, qos: int = 0) -> None:
+    async def publish(self, topic: str, message: bytes, qos: MqttQos = MqttQos.AT_MOST_ONCE) -> None:
         """Publish a message on the specified topic.
 
         This will raise an exception if the message could not be sent.
@@ -84,7 +105,7 @@ class MqttSession(ABC):
         Args:
             topic: The MQTT topic to publish to.
             message: The message payload.
-            qos: The MQTT QoS level (0, 1, or 2). Defaults to 0.
+            qos: The MQTT QoS level. Defaults to AT_MOST_ONCE.
         """
 
     @abstractmethod

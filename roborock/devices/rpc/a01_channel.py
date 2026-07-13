@@ -7,6 +7,7 @@ from typing import Any, overload
 
 from roborock.devices.transport.mqtt_channel import MqttChannel
 from roborock.exceptions import RoborockException
+from roborock.mqtt.session import MqttQos
 from roborock.protocols.a01_protocol import (
     decode_rpc_response,
     encode_mqtt_payload,
@@ -30,7 +31,7 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockDyadDataProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
-    qos: int = 0,
+    qos: MqttQos = MqttQos.AT_MOST_ONCE,
 ) -> dict[RoborockDyadDataProtocol, Any]: ...
 
 
@@ -39,7 +40,7 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockZeoProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
-    qos: int = 0,
+    qos: MqttQos = MqttQos.AT_MOST_ONCE,
 ) -> dict[RoborockZeoProtocol, Any]: ...
 
 
@@ -47,7 +48,7 @@ async def send_decoded_command(
     mqtt_channel: MqttChannel,
     params: dict[RoborockDyadDataProtocol, Any] | dict[RoborockZeoProtocol, Any],
     value_encoder: Callable[[Any], Any] | None = None,
-    qos: int = 0,
+    qos: MqttQos = MqttQos.AT_MOST_ONCE,
 ) -> dict[RoborockDyadDataProtocol, Any] | dict[RoborockZeoProtocol, Any]:
     """Send a command on the MQTT channel and get a decoded response.
 
@@ -55,7 +56,7 @@ async def send_decoded_command(
         mqtt_channel: The MQTT channel to send the command on.
         params: The parameters to send.
         value_encoder: A function to encode the values of the dictionary.
-        qos: The MQTT QoS level (0, 1, or 2). Defaults to 0.
+        qos: The MQTT QoS level. Defaults to AT_MOST_ONCE.
     """
     _LOGGER.debug("Sending MQTT command: %s", params)
     roborock_message = encode_mqtt_payload(params, value_encoder)

@@ -57,6 +57,7 @@ from roborock.data.zeo.zeo_code_mappings import (
 from roborock.devices.rpc.a01_channel import send_decoded_command
 from roborock.devices.traits import Trait
 from roborock.devices.transport.mqtt_channel import MqttChannel
+from roborock.mqtt.session import MqttQos
 from roborock.exceptions import RoborockException
 from roborock.roborock_message import RoborockDyadDataProtocol, RoborockZeoProtocol
 
@@ -265,9 +266,12 @@ class ZeoApi(Trait):
                 )
                 params[RoborockZeoProtocol.MODE] = 1
                 params[RoborockZeoProtocol.PROGRAM] = 1
-        # START commands require QoS 1; all other A01 commands use default QoS 0.
+        # START commands require AT_LEAST_ONCE; all other A01 commands use default AT_MOST_ONCE.
         return await send_decoded_command(
-            self._channel, params, value_encoder=lambda x: x, qos=1 if protocol == RoborockZeoProtocol.START else 0
+            self._channel,
+            params,
+            value_encoder=lambda x: x,
+            qos=MqttQos.AT_LEAST_ONCE if protocol == RoborockZeoProtocol.START else MqttQos.AT_MOST_ONCE,
         )
 
 

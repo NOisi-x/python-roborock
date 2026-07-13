@@ -8,7 +8,7 @@ from roborock.callbacks import decoder_callback
 from roborock.data import HomeDataDevice, RRiot, UserData
 from roborock.exceptions import RoborockException
 from roborock.mqtt.health_manager import HealthManager
-from roborock.mqtt.session import MqttParams, MqttSession, MqttSessionException
+from roborock.mqtt.session import MqttParams, MqttQos, MqttSession, MqttSessionException
 from roborock.protocol import create_mqtt_decoder, create_mqtt_encoder
 from roborock.roborock_message import RoborockMessage
 from roborock.util import RoborockLoggerAdapter
@@ -89,7 +89,7 @@ class MqttChannel(Channel):
         finally:
             unsub()
 
-    async def publish(self, message: RoborockMessage, qos: int = 0) -> None:
+    async def publish(self, message: RoborockMessage, qos: MqttQos = MqttQos.AT_MOST_ONCE) -> None:
         """Publish a command message.
 
         The caller is responsible for handling any responses and associating them
@@ -97,7 +97,7 @@ class MqttChannel(Channel):
 
         Args:
             message: The message to publish.
-            qos: The MQTT QoS level. Defaults to 0.
+            qos: The MQTT QoS level. Defaults to AT_MOST_ONCE.
         """
         try:
             encoded_msg = self._encoder(message)
