@@ -513,7 +513,6 @@ async def test_q7_device(
     ],
 )
 async def test_a01_device(
-    monkeypatch: Any,
     mock_rest: Any,
     push_mqtt_response: Callable[[bytes], None],
     log: CapturedRequestLog,
@@ -522,8 +521,6 @@ async def test_a01_device(
     snapshot: syrupy.SnapshotAssertion,
 ) -> None:
     """Test the device manager end to end flow with an A01 device."""
-    # Use a fixed timestamp so the MQTT payload snapshot is deterministic.
-    monkeypatch.setattr("roborock.protocols.a01_protocol.time.time", lambda: 1755750947.0)
     # Prepare MQTT requests
     response_builder = ResponseBuilder()
     response_builder.version = A01_VERSION
