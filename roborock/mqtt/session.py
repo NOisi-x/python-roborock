@@ -15,21 +15,18 @@ DEFAULT_TIMEOUT = 30.0
 class MqttQos(IntEnum):
     """MQTT Quality of Service levels.
 
-    Determines the delivery guarantee for published messages:
-
-    - AT_MOST_ONCE (0): Fire-and-forget. No acknowledgment required.
-    - AT_LEAST_ONCE (1): Guaranteed delivery with possible duplicates. Broker
-      sends PUBACK.
-    - EXACTLY_ONCE (2): Guaranteed delivery with no duplicates. Broker sends
-      PUBREC/PUBREL/PUBCOMP.
-
     A01 devices (Zeo, Dyad) require ``AT_LEAST_ONCE`` for DP200 (start)
     commands. Other protocol versions use ``AT_MOST_ONCE``.
     """
 
     AT_MOST_ONCE = 0
+    """Fire-and-forget. No acknowledgment required."""
+
     AT_LEAST_ONCE = 1
+    """Guaranteed delivery with possible duplicates. Broker sends PUBACK."""
+
     EXACTLY_ONCE = 2
+    """Guaranteed delivery with no duplicates. Broker sends PUBREC/PUBREL/PUBCOMP."""
 
 SessionUnauthorizedHook = Callable[[], None]
 
