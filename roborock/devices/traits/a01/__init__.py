@@ -22,6 +22,7 @@ cache state internally.
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import time
 from typing import Any
 
@@ -57,6 +58,7 @@ from roborock.data.zeo.zeo_code_mappings import (
 from roborock.devices.rpc.a01_channel import send_decoded_command
 from roborock.devices.traits import Trait
 from roborock.devices.transport.mqtt_channel import MqttChannel
+from roborock.exceptions import RoborockException
 from roborock.mqtt.session import MqttQos
 from roborock.roborock_message import RoborockDyadDataProtocol, RoborockZeoProtocol
 
@@ -208,6 +210,34 @@ class DyadApi(Trait):
         return await send_decoded_command(self._channel, params)
 
 
+@dataclass
+class ZeoStartParams:
+    """Parameters that must be bundled with a START command.
+
+    All Zeo devices require ``mode`` and ``program`` to be sent together
+    with the start signal. The remaining fields are optional and only
+    included when the device reports a non-None value.
+    """
+
+    mode: int
+    """Wash mode (e.g. wash, wash-and-dry, dry, treatment)."""
+
+    program: int
+    """Wash program (e.g. standard, quick, wool)."""
+
+    temp: int | None = None
+    """Water temperature."""
+
+    rinse_times: int | None = None
+    """Number of rinse cycles."""
+
+    spin_level: int | None = None
+    """Spin speed (RPM)."""
+
+    drying_mode: int | None = None
+    """Drying mode (e.g. quick, iron, store)."""
+
+
 class ZeoApi(Trait):
     """API for interacting with Zeo devices."""
 
@@ -237,17 +267,12 @@ class ZeoApi(Trait):
         RoborockZeoProtocol.DRYING_MODE,
     )
 
-    async def _get_current_params(
-        self,
-    ) -> dict[RoborockZeoProtocol, Any]:
-        """Query the device for the parameters needed by a START command.
+    async def _get_current_params(self) -> ZeoStartParams:
+        """Query the device and return typed start parameters.
 
-        Returns a dictionary of the current values for each start-relevant
-        DP.  Raises :exc:`RoborockException` if any of the requested DPs
-        are not returned by the device.
+        Raises :exc:`RoborockException` if any of the required DPs are not
+        returned by the device.
         """
-        from roborock.exceptions import RoborockException
-
         current = await send_decoded_command(
             self._channel,
             {RoborockZeoProtocol.ID_QUERY: list(self._START_PARAM_DPS)},
@@ -258,18 +283,46 @@ class ZeoApi(Trait):
                 raise RoborockException(
                     f"Device did not return required DP {dp.name} ({int(dp)})"
                 )
-        return {dp: current[dp] for dp in self._START_PARAM_DPS}
+        return ZeoStartParams(
+            mode=current[RoborockZeoProtocol.MODE],
+            program=current[RoborockZeoProtocol.PROGRAM],
+            temp=current.get(RoborockZeoProtocol.TEMP),
+            rinse_times=current.get(RoborockZeoProtocol.RINSE_TIMES),
+            spin_level=current.get(RoborockZeoProtocol.SPIN_LEVEL),
+            drying_mode=current.get(RoborockZeoProtocol.DRYING_MODE),
+        )
+
+    async def start(self) -> dict[RoborockZeoProtocol, Any]:
+        """Start the device using the current mode and program parameters.
+
+        Queries the device for the current wash settings and sends them
+        bundled with the START command. This uses QoS 1 as required by the
+        device firmware.
+        """
+        _LOGGER.debug("Start command: querying current device state")
+        p = await self._get_current_params()
+        dps: dict[RoborockZeoProtocol, Any] = {
+            RoborockZeoProtocol.START: 1,
+            RoborockZeoProtocol.MODE: p.mode,
+            RoborockZeoProtocol.PROGRAM: p.program,
+        }
+        for dp, val in (
+            (RoborockZeoProtocol.TEMP, p.temp),
+            (RoborockZeoProtocol.RINSE_TIMES, p.rinse_times),
+            (RoborockZeoProtocol.SPIN_LEVEL, p.spin_level),
+            (RoborockZeoProtocol.DRYING_MODE, p.drying_mode),
+        ):
+            if val is not None:
+                dps[dp] = val
+        return await send_decoded_command(
+            self._channel, dps, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE
+        )
 
     async def set_value(self, protocol: RoborockZeoProtocol, value: Any) -> dict[RoborockZeoProtocol, Any]:
         """Set a value for a specific protocol on the device."""
-        params: dict[RoborockZeoProtocol, Any] = {protocol: value}
         if protocol == RoborockZeoProtocol.START and value == 1:
-            _LOGGER.debug("Start command detected, querying current device state")
-            current = await self._get_current_params()
-            params.update(current)
-            return await send_decoded_command(
-                self._channel, params, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE
-            )
+            return await self.start()
+        params: dict[RoborockZeoProtocol, Any] = {protocol: value}
         return await send_decoded_command(self._channel, params, value_encoder=lambda x: x)
 
 
