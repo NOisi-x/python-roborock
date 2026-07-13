@@ -21,8 +21,8 @@ class ZeoState(RoborockEnum):
     under_delay_start = 9
     done = 10
     updating = 11
-    smart_hosting = 12
-    smart_hosting_waiting = 13
+    aftercare = 12  # canonical name from app bundle: smart_hosting
+    waiting_for_aftercare = 13  # canonical name from app bundle: smart_hosting_waiting
     steam_caring = 14
     descaling = 15
     cloth_ready = 16
