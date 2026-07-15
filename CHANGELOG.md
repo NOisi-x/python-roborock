@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v5.31.0 (2026-07-15)
+
+### Features
+
+- Add Q10 integration test and support stream streaming on FakeChannel
+  ([#869](https://github.com/Python-roborock/python-roborock/pull/869),
+  [`502fa42`](https://github.com/Python-roborock/python-roborock/commit/502fa424c4a8fd36b759de8c8557c8665e4d0d13))
+
+- Implement Q10VacuumSimulator and export it
+  ([#869](https://github.com/Python-roborock/python-roborock/pull/869),
+  [`502fa42`](https://github.com/Python-roborock/python-roborock/commit/502fa424c4a8fd36b759de8c8557c8665e4d0d13))
+
+- Implement stateful Q10 device simulator and integration tests
+  ([#869](https://github.com/Python-roborock/python-roborock/pull/869),
+  [`502fa42`](https://github.com/Python-roborock/python-roborock/commit/502fa424c4a8fd36b759de8c8557c8665e4d0d13))
+
+
 ## v5.30.0 (2026-07-13)
 
 ### Bug Fixes
