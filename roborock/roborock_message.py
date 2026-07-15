@@ -154,9 +154,9 @@ class RoborockZeoProtocol(RoborockEnum):
     DETERGENT_EMPTY = 226  # ro
     SOFTENER_EMPTY = 227  # ro
     UV_LIGHT = 228  # rw
-    LIGHT_SETTING = 229  # rw
-    DETERGENT_VOLUME = 230  # rw
-    SOFTENER_VOLUME = 231  # rw
+    LIGHT_SETTING = 229  # rw  (not found in app bundle)
+    DETERGENT_VOLUME = 230  # rw  (not found in app bundle)
+    SOFTENER_VOLUME = 231  # rw  (not found in app bundle)
     APP_AUTHORIZATION = 232  # rw
     SOAK = 233  # rw
     TOTAL_TIME = 234  # ro
@@ -191,13 +191,19 @@ class RoborockZeoProtocol(RoborockEnum):
     WIFI_LINKAGE_RESET = 266  # rw
     ID_QUERY = 10000
     F_C = 10001
+    SET_SOUND_PACKAGE = 10003
     SND_STATE = 10004
     PRODUCT_INFO = 10005
     PRIVACY_INFO = 10006
     OTA_NFO = 10007
     WASHING_LOG = 10008
-    RPC_REQ = 10101
-    RPC_RESp = 10102
+    VOICE_VOLUME = 10009
+    RPC_REQUEST = 10101
+    RPC_RESPONSE = 10102
+    VOICE_SWITCH = 10301
+    VOICE_RECORD_INFO = 10302
+    VOICE_RECORD = 10303
+    VOICE_RECORD_DELETE = 10304
 
 
 class RoborockB01Protocol(RoborockEnum):

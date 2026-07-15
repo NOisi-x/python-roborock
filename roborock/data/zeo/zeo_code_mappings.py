@@ -17,6 +17,35 @@ never sent to the device.
 from ..code_mappings import RoborockEnum
 
 
+class ZeoFeatureBits(RoborockEnum):
+    """Bit positions in DP 237 (FEATURE_BITS)."""
+
+    smart_hosting = 0
+    silent_mode = 1
+    new_custom_program = 2
+    dry_care = 3
+    set_uvc_in_appointment = 4
+    detect_door_status = 5
+    expand_softener = 6
+    set_params_in_working = 7
+    thirty_min_soak = 8
+    smile_light = 9
+    set_uvc_in_pause = 10
+    concentrated_detergent = 11
+    wool_detergent = 12
+    voice_assistant = 13
+    adapted_custom_program = 14
+    voice_assistant_record = 15
+    fluff_clean_notification = 16
+    power_button_indicator_light = 17
+    dirt_detection = 18
+    deep_self_clean = 19
+    save_panel_program_params = 20
+    steam_care = 21
+    wash_dry_linkage = 22
+    ion_deodorization = 23
+
+
 class ZeoMode(RoborockEnum):
     null = 0
     wash = 1
