@@ -15,8 +15,9 @@ The API provides two main methods:
 2.  **set_value(protocol, value)**: Sends a command to the device to change a setting
     or perform an action.
 
-Note that these APIs fetch data directly from the device upon request and do not
-cache state internally.
+``DyadApi`` is stateless.  ``ZeoApi`` maintains an internal DPS cache
+(populated by MQTT push, ``set_value``, and ``query_values``) to bridge
+the ``set_value`` → ``start()`` call window without extra MQTT round trips.
 """
 
 import json
@@ -75,6 +76,7 @@ __all__ = [
     "ZeoApi",
     "ZeoFeatureTrait",
     "ZeoCustomMode",
+    "ZeoDryerCustomMode",
     "ZeoStartParams",
 ]
 
@@ -311,13 +313,13 @@ class ZeoStartParams:
     """Wash program (e.g. standard, quick, wool)."""
 
     temp: int | None = None
-    """Water temperature."""
+    """Water temperature (always ``None`` for dryers)."""
 
     rinse_times: int | None = None
-    """Number of rinse cycles."""
+    """Number of rinse cycles (always ``None`` for dryers)."""
 
     spin_level: int | None = None
-    """Spin speed (RPM)."""
+    """Spin speed in RPM (always ``None`` for dryers)."""
 
     drying_mode: int | None = None
     """Drying mode (e.g. quick, iron, store)."""
@@ -384,15 +386,81 @@ class ZeoCustomMode:
         )
 
 
+@dataclass
+class ZeoDryerCustomMode:
+    """Decoded custom programme from DP 222 for a standalone dryer.
+
+    Dryers pack a different (shorter) bitfield than washers — only 5
+    fields after program/mode.  Mirrors ``WasherDpsCache.dryerCustomMode``
+    in module 725 of the plugin bundle.
+    """
+
+    program: int
+    """Drying program (bits 0-7)."""
+
+    mode: int
+    """Drying mode (bits 8-10)."""
+
+    dry: int
+    """Drying level (bits 11-13)."""
+
+    dry_method: int
+    """Drying method (bits 14-16)."""
+
+    steam_volume: int
+    """Steam volume (bits 17-19)."""
+
+    total_time_min: int = 0
+    """Total programme time in minutes (from DP 239)."""
+
+    @classmethod
+    def from_raw(cls, raw: int, total_time_min: int | None = None) -> "ZeoDryerCustomMode":
+        """Decode a raw 32-bit dryer custom-programme value."""
+        return cls(
+            program=(raw & 0xFF),
+            # Dryer mode spans bits 8-10 (0x700, 3 bits) because the
+            # temperature field is absent from the dryer bitfield and
+            # bit 10 is re-allocated to mode.  Washer uses 2 bits
+            # (0x300, bits 8-9) to make room for temperature at 10-12.
+            mode=(raw >> 8) & 0x7,
+            dry=(raw >> 11) & 0x7,
+            dry_method=(raw >> 14) & 0x7,
+            steam_volume=(raw >> 17) & 0x7,
+            total_time_min=total_time_min or 0,
+        )
+
+
 class ZeoApi(Trait):
     """API for interacting with Zeo devices."""
 
     name = "zeo"
 
-    def __init__(self, channel: MqttChannel) -> None:
-        """Initialize the Zeo API."""
+    def __init__(
+        self,
+        channel: MqttChannel,
+        *,
+        is_dryer: bool = False,
+        is_hyperion_halia_hera: bool = False,
+        is_m1_muse_metis: bool = False,
+    ) -> None:
+        """Initialize the Zeo API.
+
+        Args:
+            channel: The MQTT channel for device communication.
+            is_dryer: ``True`` for standalone dryers (Apollo series).
+            is_hyperion_halia_hera: ``True`` for Hyperion/Halia/Hera.
+                These series use a different detergent‑type auto‑enable
+                protocol (type=0 sends *only* AutoDetergent=False,
+                skipping DetergentType entirely).
+            is_m1_muse_metis: ``True`` for M1/Muse/Metis series.
+                These series skip softener‑related DPs in force_load
+                (they do not have a softener compartment).
+        """
         self._channel = channel
         self._feature_trait = ZeoFeatureTrait(channel)
+        self.is_dryer = is_dryer
+        self.is_hyperion_halia_hera = is_hyperion_halia_hera
+        self.is_m1_muse_metis = is_m1_muse_metis
         # The DPS cache is populated from three sources.  The final
         # writer wins; there is no priority — ``start()`` reads
         # whatever is in the cache at call time.
@@ -460,9 +528,10 @@ class ZeoApi(Trait):
                 self._dps_cache[int(protocol)] = raw_val
         return {protocol: convert_zeo_value(protocol, response.get(protocol)) for protocol in protocols}
 
-    # The DP IDs that must be bundled with START commands. These are the
-    # universally-supported core parameters common to all Zeo devices.
-    _START_PARAM_DPS: tuple[RoborockZeoProtocol, ...] = (
+    # ── START parameter DPs ────────────────────────────────────────
+    # Washer: Mode, Program, Temp, Rinse, Spin, DryingMode
+    # Dryer:  Mode, Program, DryingMode, DryingMethod, SteamVolume
+    _START_PARAM_DPS_WASHER: tuple[RoborockZeoProtocol, ...] = (
         RoborockZeoProtocol.MODE,
         RoborockZeoProtocol.PROGRAM,
         RoborockZeoProtocol.TEMP,
@@ -470,6 +539,18 @@ class ZeoApi(Trait):
         RoborockZeoProtocol.SPIN_LEVEL,
         RoborockZeoProtocol.DRYING_MODE,
     )
+    _START_PARAM_DPS_DRYER: tuple[RoborockZeoProtocol, ...] = (
+        RoborockZeoProtocol.MODE,
+        RoborockZeoProtocol.PROGRAM,
+        RoborockZeoProtocol.DRYING_MODE,
+        RoborockZeoProtocol.DRYING_METHOD,
+        RoborockZeoProtocol.STEAM_VOLUME,
+    )
+
+    @property
+    def _start_params(self) -> tuple[RoborockZeoProtocol, ...]:
+        """Return the START-parameter DP set for this device type."""
+        return self._START_PARAM_DPS_DRYER if self.is_dryer else self._START_PARAM_DPS_WASHER
 
     # DPs that are only included in START when the device reports
     # the corresponding FeatureBit in DP 237.
@@ -517,21 +598,22 @@ class ZeoApi(Trait):
         query fills the cache as a fallback.
         """
         await self._ensure_subscribed()
-        required_ids = [int(dp) for dp in self._START_PARAM_DPS]
+        start_dps = self._start_params
+        required_ids = [int(dp) for dp in start_dps]
         if all(dp_id in self._dps_cache for dp_id in required_ids):
             _LOGGER.debug("Using cached start parameters")
         else:
             _LOGGER.debug("Cache miss, querying start parameters")
             current = await send_decoded_command(
                 self._channel,
-                {RoborockZeoProtocol.ID_QUERY: list(self._START_PARAM_DPS)},
+                {RoborockZeoProtocol.ID_QUERY: list(start_dps)},
                 value_encoder=json.dumps,
             )
             for dp, raw_val in current.items():
                 if raw_val is not None:
                     self._dps_cache[int(dp)] = raw_val
         cache = self._dps_cache
-        for dp in self._START_PARAM_DPS:
+        for dp in start_dps:
             if int(dp) not in cache:
                 raise RoborockException(f"Device did not return required DP {dp.name} ({int(dp)})")
         return ZeoStartParams(
@@ -544,41 +626,47 @@ class ZeoApi(Trait):
         )
 
     async def start(self) -> dict[RoborockZeoProtocol, Any]:
-        """Start the device using the current mode and program parameters.
-
-        Discovers device capabilities via DP 237 on first call, then
-        bundles the current wash settings with the START command at
-        QoS 1 as required by the device firmware.
-        """
+        """Start the device using the current mode and program parameters."""
         _LOGGER.debug("Start command: discovering features and building payload")
         await self._feature_trait.refresh()
         features = self._feature_trait.features
         p = await self._get_start_params()
-        # START is an action DP: the official app sends DPBoolean.True ("True"),
-        # not the integer 1.  Mirror the reference wire format exactly.
         dps: dict[RoborockZeoProtocol, Any] = {
             RoborockZeoProtocol.START: "True",
             RoborockZeoProtocol.MODE: p.mode,
             RoborockZeoProtocol.PROGRAM: p.program,
         }
-        for dp, val in (
-            (RoborockZeoProtocol.TEMP, p.temp),
-            (RoborockZeoProtocol.RINSE_TIMES, p.rinse_times),
-            (RoborockZeoProtocol.SPIN_LEVEL, p.spin_level),
-            (RoborockZeoProtocol.DRYING_MODE, p.drying_mode),
-        ):
-            if val is not None:
-                dps[dp] = val
+        if self.is_dryer:
+            total = self._dps_cache.get(int(RoborockZeoProtocol.TOTAL_TIME))
+            if total and int(total) > 0:
+                dps[RoborockZeoProtocol.TOTAL_TIME] = int(total)
+            for dp in (
+                RoborockZeoProtocol.DRYING_MODE,
+                RoborockZeoProtocol.DRYING_METHOD,
+                RoborockZeoProtocol.STEAM_VOLUME,
+            ):
+                val = self._dps_cache.get(int(dp))
+                if val is not None:
+                    dps[dp] = val
+        else:
+            for dp, val in (
+                (RoborockZeoProtocol.TEMP, p.temp),
+                (RoborockZeoProtocol.RINSE_TIMES, p.rinse_times),
+                (RoborockZeoProtocol.SPIN_LEVEL, p.spin_level),
+                (RoborockZeoProtocol.DRYING_MODE, p.drying_mode),
+            ):
+                if val is not None:
+                    dps[dp] = val
         await self._build_feature_gated_dps(features, dps)
         return await send_decoded_command(self._channel, dps, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE)
 
     # ── Custom programme (DP 222 bitfield) ──────────────────────────
 
-    async def get_custom_mode(self) -> ZeoCustomMode:
+    async def get_custom_mode(self) -> ZeoCustomMode | ZeoDryerCustomMode:
         """Decode the current custom programme from DP 222 + DP 239.
 
-        Returns a :class:`ZeoCustomMode` instance.  All integer fields
-        default to 0 when the device has not saved a custom programme.
+        Returns :class:`ZeoDryerCustomMode` for dryers, else
+        :class:`ZeoCustomMode`.
         """
         result = await send_decoded_command(
             self._channel,
@@ -592,7 +680,11 @@ class ZeoApi(Trait):
         )
         raw = result.get(RoborockZeoProtocol.CUSTOM_PARAM_GET, 0)
         total = result.get(RoborockZeoProtocol.CUSTOM_PROGRAM_CLEANING_TIME)
-        return ZeoCustomMode.from_raw(int(raw) if raw else 0, int(total) if total else None)
+        raw_int = int(raw) if raw else 0
+        total_int = int(total) if total else None
+        if self.is_dryer:
+            return ZeoDryerCustomMode.from_raw(raw_int, total_int)
+        return ZeoCustomMode.from_raw(raw_int, total_int)
 
     # ── Silent mode (bundled 3-DP set) ──────────────────────────────
 
@@ -625,10 +717,13 @@ class ZeoApi(Trait):
         return result
 
     # ── Cloud / Panel program save ──────────────────────────────────
+    # TODO: extract shared save logic from save_cloud_program and
+    #       save_panel_program — the two methods are near-identical
+    #       apart from the save-DP selection at the end.
 
     # DP set that mirrors the optional parameters in the official
     # app's saveCloudProgramWith / savePanelProgramWith.
-    _SAVE_PARAM_DPS: tuple[RoborockZeoProtocol, ...] = (
+    _SAVE_PARAM_DPS_WASHER: tuple[RoborockZeoProtocol, ...] = (
         RoborockZeoProtocol.SOAK,
         RoborockZeoProtocol.TEMP,
         RoborockZeoProtocol.RINSE_TIMES,
@@ -638,6 +733,16 @@ class ZeoApi(Trait):
         RoborockZeoProtocol.DRYING_METHOD,
         RoborockZeoProtocol.STEAM_VOLUME,
     )
+    _SAVE_PARAM_DPS_DRYER: tuple[RoborockZeoProtocol, ...] = (
+        RoborockZeoProtocol.DRYING_MODE,
+        RoborockZeoProtocol.DRYING_METHOD,
+        RoborockZeoProtocol.STEAM_VOLUME,
+    )
+
+    @property
+    def _save_params(self) -> tuple[RoborockZeoProtocol, ...]:
+        """Return the save-parameter DP set for this device type."""
+        return self._SAVE_PARAM_DPS_DRYER if self.is_dryer else self._SAVE_PARAM_DPS_WASHER
 
     async def _build_save_payload(self) -> dict[RoborockZeoProtocol, Any]:
         """Bundle Mode + Program + cached optionals for a save command."""
@@ -650,7 +755,7 @@ class ZeoApi(Trait):
                 int(RoborockZeoProtocol.PROGRAM), 1
             ),
         }
-        for dp in self._SAVE_PARAM_DPS:
+        for dp in self._save_params:
             val = self._dps_cache.get(int(dp))
             if val is not None:
                 payload[dp] = val
@@ -775,14 +880,27 @@ class ZeoApi(Trait):
             RoborockZeoProtocol.MODE: p.mode,
             RoborockZeoProtocol.PROGRAM: p.program,
         }
-        for dp, val in (
-            (RoborockZeoProtocol.TEMP, p.temp),
-            (RoborockZeoProtocol.RINSE_TIMES, p.rinse_times),
-            (RoborockZeoProtocol.SPIN_LEVEL, p.spin_level),
-            (RoborockZeoProtocol.DRYING_MODE, p.drying_mode),
-        ):
-            if val is not None:
-                dps[dp] = val
+        if self.is_dryer:
+            total = self._dps_cache.get(int(RoborockZeoProtocol.TOTAL_TIME))
+            if total and int(total) > 0:
+                dps[RoborockZeoProtocol.TOTAL_TIME] = int(total)
+            for dp in (
+                RoborockZeoProtocol.DRYING_MODE,
+                RoborockZeoProtocol.DRYING_METHOD,
+                RoborockZeoProtocol.STEAM_VOLUME,
+            ):
+                val = self._dps_cache.get(int(dp))
+                if val is not None:
+                    dps[dp] = val
+        else:
+            for dp, val in (
+                (RoborockZeoProtocol.TEMP, p.temp),
+                (RoborockZeoProtocol.RINSE_TIMES, p.rinse_times),
+                (RoborockZeoProtocol.SPIN_LEVEL, p.spin_level),
+                (RoborockZeoProtocol.DRYING_MODE, p.drying_mode),
+            ):
+                if val is not None:
+                    dps[dp] = val
         await self._build_feature_gated_dps(features, dps)
         dps[RoborockZeoProtocol.COUNTDOWN] = countdown_minutes
         return await send_decoded_command(self._channel, dps, value_encoder=lambda x: x, qos=MqttQos.AT_LEAST_ONCE)
@@ -863,19 +981,46 @@ class ZeoApi(Trait):
         RoborockZeoProtocol.F_C,
     )
 
+    _FORCE_LOAD_DRYER_DPS: tuple[RoborockZeoProtocol, ...] = (
+        RoborockZeoProtocol.START,
+        RoborockZeoProtocol.PAUSE,
+        RoborockZeoProtocol.STATE,
+        RoborockZeoProtocol.SHUTDOWN,
+        RoborockZeoProtocol.MODE,
+        RoborockZeoProtocol.PROGRAM,
+        RoborockZeoProtocol.CHILD_LOCK,
+        RoborockZeoProtocol.DRYING_MODE,
+        RoborockZeoProtocol.COUNTDOWN,
+        RoborockZeoProtocol.PRODUCT_INFO,
+        RoborockZeoProtocol.WASHING_LEFT,
+        RoborockZeoProtocol.DOORLOCK_STATE,
+        RoborockZeoProtocol.ERROR,
+        RoborockZeoProtocol.CUSTOM_PARAM_GET,
+        RoborockZeoProtocol.SOUND_SET,
+        RoborockZeoProtocol.WASHING_LOG,
+        RoborockZeoProtocol.OTA_NFO,
+        RoborockZeoProtocol.F_C,
+    )
+
     async def force_load(self) -> dict[RoborockZeoProtocol, Any]:
         """Phase‑1 poll: load all essential DPs (mirrors the app's ``forceLoad``)."""
         await self._ensure_subscribed()
-        result = await self.query_values(list(self._FORCE_LOAD_WASHER_DPS))
-        # Also fetch optional DPs that are universally supported
-        optional: list[RoborockZeoProtocol] = [
-            RoborockZeoProtocol.SOFTENER_SET,
-            RoborockZeoProtocol.SOFTENER_TYPE,
-        ]
-        if self.is_addition_type_control:
-            optional.append(RoborockZeoProtocol.DEFAULT_SETTING)
-        optional.append(RoborockZeoProtocol.SOFTENER_EMPTY)
-        await self.query_values(optional)
+        if self.is_dryer:
+            dps = list(self._FORCE_LOAD_DRYER_DPS)
+        else:
+            dps = list(self._FORCE_LOAD_WASHER_DPS)
+        result = await self.query_values(dps)
+        # M1 / Muse / Metis series have no softener compartment — the
+        # official app skips softener DPs for those models entirely.
+        if not self.is_dryer and not self.is_m1_muse_metis:
+            optional: list[RoborockZeoProtocol] = [
+                RoborockZeoProtocol.SOFTENER_SET,
+                RoborockZeoProtocol.SOFTENER_TYPE,
+            ]
+            if self.is_addition_type_control:
+                optional.append(RoborockZeoProtocol.DEFAULT_SETTING)
+            optional.append(RoborockZeoProtocol.SOFTENER_EMPTY)
+            await self.query_values(optional)
         return result
 
     async def load_feature_dps(self) -> dict[RoborockZeoProtocol, Any]:
@@ -932,9 +1077,12 @@ class ZeoApi(Trait):
                 RoborockZeoProtocol.WASH_DRY_LINKED,
                 RoborockZeoProtocol.DEVICE_BOUND,
                 RoborockZeoProtocol.CLOTH_PUT_IN,
-                RoborockZeoProtocol.CLOTH_READY_TO_DRY_COUNT_DOWN,
-                RoborockZeoProtocol.START_DRYER_ERROR,
             ]
+            if not self.is_dryer:
+                wanted += [
+                    RoborockZeoProtocol.CLOTH_READY_TO_DRY_COUNT_DOWN,
+                    RoborockZeoProtocol.START_DRYER_ERROR,
+                ]
         if features.save_panel_program_params:
             wanted.append(RoborockZeoProtocol.WIFI_LINKAGE_RESET)
         if not wanted:
@@ -964,22 +1112,47 @@ class ZeoApi(Trait):
         if protocol == RoborockZeoProtocol.START and parse_bool(value):
             return await self.start()
 
-        # ── Detergent / Softener type auto-enable ──────────────────
-        # Mirror the official app: when setting a non-zero detergent or
-        # softener type, also send AutoDetergent=True / AutoSoftener=True
-        # so the device enables automatic dispensing.
+        # ── Detergent / Softener type auto-enable (washer only) ────
+        # The official app uses three different protocols depending on
+        # device series.  Default / Hyperion-Halia-Hera are handled
+        # here; ``is_addition_type_control`` devices (newer firmware)
+        # send DetergentType alone — callers should set that flag to
+        # opt in.
         params: dict[RoborockZeoProtocol, Any] = {protocol: value}
-        try:
-            int_val = int(value)
-        except (ValueError, TypeError):
-            int_val = 0
-        auto_enable_dp: RoborockZeoProtocol | None = None
-        if protocol == RoborockZeoProtocol.DETERGENT_TYPE:
-            auto_enable_dp = RoborockZeoProtocol.DETERGENT_SET
-        elif protocol == RoborockZeoProtocol.SOFTENER_TYPE:
-            auto_enable_dp = RoborockZeoProtocol.SOFTENER_SET
-        if auto_enable_dp is not None:
-            params[auto_enable_dp] = int_val != 0
+        if not self.is_dryer:
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                int_val = 0
+            if protocol == RoborockZeoProtocol.DETERGENT_TYPE:
+                if self.is_addition_type_control:
+                    pass  # Only DetergentType — no AutoDetergent bundling
+                elif self.is_hyperion_halia_hera:
+                    if int_val == 0:
+                        # Mirror the official app: type=0 sends only
+                        # AutoDetergent=False, deleting DetergentType
+                        # from the payload.  The deleted DP is NOT
+                        # cached below — MQTT push will correct it.
+                        params[RoborockZeoProtocol.DETERGENT_SET] = False
+                        del params[RoborockZeoProtocol.DETERGENT_TYPE]
+                    else:
+                        params[RoborockZeoProtocol.DETERGENT_SET] = True
+                else:
+                    params[RoborockZeoProtocol.DETERGENT_SET] = int_val != 0
+            elif protocol == RoborockZeoProtocol.SOFTENER_TYPE:
+                if self.is_addition_type_control:
+                    pass
+                elif self.is_hyperion_halia_hera:
+                    if int_val == 0:
+                        # Mirror the official app: same pattern as
+                        # detergent above — SoftenerType is deleted
+                        # from the payload and not cached.
+                        params[RoborockZeoProtocol.SOFTENER_SET] = False
+                        del params[RoborockZeoProtocol.SOFTENER_TYPE]
+                    else:
+                        params[RoborockZeoProtocol.SOFTENER_SET] = True
+                else:
+                    params[RoborockZeoProtocol.SOFTENER_SET] = int_val != 0
 
         # ── Encoder selection ─────────────────────────────────────
         if (voice_enc := self._VOICE_ENCODERS.get(protocol)) is not None:
@@ -990,10 +1163,60 @@ class ZeoApi(Trait):
             encoder = None
 
         result = await send_decoded_command(self._channel, params, value_encoder=encoder)
-        self._dps_cache[int(protocol)] = value
-        if auto_enable_dp is not None:
-            self._dps_cache[int(auto_enable_dp)] = int_val != 0
+        # Cache update must mirror exactly what was sent (params may
+        # have been mutated above for Hyperion/Halia/Hera series).
+        for dp, v in params.items():
+            self._dps_cache[int(dp)] = v
         return result
+
+
+# ── Dryer model detection ────────────────────────────────────────
+# Matches the ``target: "dryer"`` entries in the plugin bundle's
+# publishConfig (Apollo series: a188, a204, a258, a265).
+_DRYER_PRODUCT_IDS: frozenset[str] = frozenset(
+    {"roborock.wm.a188", "roborock.wm.a204", "roborock.wm.a258", "roborock.wm.a265"}
+)
+
+# ── Device series detection ──────────────────────────────────────
+# The plugin bundle branches on device series for detergent/softener
+# auto‑enable logic and for force‑load DP selection.  These frozensets
+# mirror the ``isHyperionSeries / isHaliaSeries / isHeraSeries`` and
+# ``isM1Series / isMuseSeries / isMetisSeries`` guards.
+_HYPERION_HALIA_HERA_PRODUCT_IDS: frozenset[str] = frozenset({
+    # Hyperion series
+    "roborock.wm.a141", "roborock.wm.a149", "roborock.wm.a207", "roborock.wm.a230",
+    # Halia series
+    "roborock.wm.a240", "roborock.wm.a241",
+    # Hera series
+    "roborock.wm.a227", "roborock.wm.a261", "roborock.wm.a273",
+    "roborock.wm.a268", "roborock.wm.a269",
+})
+
+_M1_MUSE_METIS_PRODUCT_IDS: frozenset[str] = frozenset({
+    # M1 series
+    "roborock.wm.a92",  "roborock.wm.a93",  "roborock.wm.a133", "roborock.wm.a277",
+    "roborock.wm.a162", "roborock.wm.a233", "roborock.wm.a276", "roborock.wm.a234",
+    "roborock.wm.a218",
+    # Muse series
+    "roborock.wm.a142", "roborock.wm.a215",
+    # Metis series
+    "roborock.wm.a154", "roborock.wm.a214",
+})
+
+
+def _is_dryer(product: HomeDataProduct) -> bool:
+    """Return ``True`` when *product* is a known standalone-dryer model."""
+    return product.id in _DRYER_PRODUCT_IDS
+
+
+def _is_hyperion_halia_hera(product: HomeDataProduct) -> bool:
+    """Return ``True`` for Hyperion / Halia / Hera series washers."""
+    return product.id in _HYPERION_HALIA_HERA_PRODUCT_IDS
+
+
+def _is_m1_muse_metis(product: HomeDataProduct) -> bool:
+    """Return ``True`` for M1 / Muse / Metis series washers."""
+    return product.id in _M1_MUSE_METIS_PRODUCT_IDS
 
 
 def create(product: HomeDataProduct, mqtt_channel: MqttChannel) -> DyadApi | ZeoApi:
@@ -1002,6 +1225,11 @@ def create(product: HomeDataProduct, mqtt_channel: MqttChannel) -> DyadApi | Zeo
         case RoborockCategory.WET_DRY_VAC:
             return DyadApi(mqtt_channel)
         case RoborockCategory.WASHING_MACHINE:
-            return ZeoApi(mqtt_channel)
+            return ZeoApi(
+                mqtt_channel,
+                is_dryer=_is_dryer(product),
+                is_hyperion_halia_hera=_is_hyperion_halia_hera(product),
+                is_m1_muse_metis=_is_m1_muse_metis(product),
+            )
         case _:
             raise NotImplementedError(f"Unsupported category {product.category}")

@@ -18,7 +18,12 @@ from ..code_mappings import RoborockEnum
 
 
 class ZeoFeatureBits(RoborockEnum):
-    """Bit positions in DP 237 (FEATURE_BITS)."""
+    """Bit positions in DP 237 (FEATURE_BITS).
+
+    Extracted from the official Roborock Washer app plugin bundle
+    (index.ios.bundle, module 726).  Each member's integer value
+    is the exact bit offset the device reports at DP 237.
+    """
 
     smart_hosting = 0
     silent_mode = 1
@@ -47,7 +52,7 @@ class ZeoFeatureBits(RoborockEnum):
 
 
 class ZeoMode(RoborockEnum):
-    null = 0
+    null = 0  # (not found in app bundle)
     wash = 1
     wash_and_dry = 2
     dry = 3
@@ -78,7 +83,7 @@ class ZeoState(RoborockEnum):
 
 
 class ZeoProgram(RoborockEnum):
-    null = 0
+    null = 0  # (not found in app bundle)
     standard = 1  # Mixed
     quick = 2
     sanitize = 3  # Sterilization
@@ -166,7 +171,7 @@ class ZeoRinse(RoborockEnum):
 
 
 class ZeoSpin(RoborockEnum):
-    null = 0  # 0 RPM
+    null = 0  # (not found in app bundle)
     none = 1  # L1, 0 RPM
     very_low = 2  # L2, 400 RPM
     low = 3  # L3, 600 RPM
