@@ -73,7 +73,7 @@ def test_parse_bool_trap_is_avoided():
     [(True, "True"), (False, "False"), (1, "True"), (0, "False"), ("True", "True"), ("False", "False")],
 )
 def test_to_dp_bool(val, expected):
-    assert to_dp_bool(val) == expected
+    assert to_dp_bool(val) == expected, f"to_dp_bool({val!r}) should be {expected}"
 
 
 def test_boolean_protocol_sets_are_consistent():
@@ -126,9 +126,7 @@ def test_zeo_feature_bits_match_bundle_positions():
         ZeoFeatureBits.ion_deodorization: 23,
     }
     for member, expected_pos in expected.items():
-        assert int(member) == expected_pos, (
-            f"{member.name} is at bit {int(member)}, expected {expected_pos}"
-        )
+        assert int(member) == expected_pos, f"{member.name} is at bit {int(member)}, expected {expected_pos}"
 
 
 def test_zeo_features_fields_map_to_feature_bits():
@@ -138,9 +136,7 @@ def test_zeo_features_fields_map_to_feature_bits():
     ZeoFeatures.from_feature_bits() to raise AttributeError.
     """
     for f in fields(ZeoFeatures):
-        assert hasattr(ZeoFeatureBits, f.name), (
-            f"ZeoFeatures.{f.name} has no matching ZeoFeatureBits member"
-        )
+        assert hasattr(ZeoFeatureBits, f.name), f"ZeoFeatures.{f.name} has no matching ZeoFeatureBits member"
 
 
 def test_zeo_features_from_feature_bits_decodes_correct_bits():
@@ -205,7 +201,7 @@ async def test_dyad_set_value_bool_serialises_as_string(mock_channel):
 
 @pytest.mark.asyncio
 async def test_zeo_start_sends_true_and_bundles_core_params(mock_channel):
-    """start() must send START="True" (DPBoolean.True), not the integer 1."""
+    """start() must send START="True" (DPBoolean.True), not an integer."""
     mock_channel.subscribe = AsyncMock(return_value=Mock())
 
     captured = []
@@ -226,22 +222,19 @@ async def test_zeo_start_sends_true_and_bundles_core_params(mock_channel):
             }
         return {}
 
-    with patch(
-        "roborock.devices.traits.a01.send_decoded_command", new_callable=AsyncMock, side_effect=_side_effect
-    ), patch(
-        "roborock.devices.traits.a01.device_features.send_decoded_command",
-        new_callable=AsyncMock,
-        side_effect=_side_effect,
+    with (
+        patch("roborock.devices.traits.a01.send_decoded_command", new_callable=AsyncMock, side_effect=_side_effect),
+        patch(
+            "roborock.devices.traits.a01.device_features.send_decoded_command",
+            new_callable=AsyncMock,
+            side_effect=_side_effect,
+        ),
     ):
         api = ZeoApi(mock_channel)
         await api.start()
 
     # The SET (non-query) command is the one that carries START.
-    set_calls = [
-        params
-        for params, _ in captured
-        if _ID_QUERY_INT not in {int(k) for k in params}
-    ]
+    set_calls = [params for params, _ in captured if _ID_QUERY_INT not in {int(k) for k in params}]
     assert set_calls, "start() should issue a SET command"
     start_params = set_calls[-1]
     assert start_params[RoborockZeoProtocol.START] == "True"
@@ -275,24 +268,27 @@ async def test_zeo_start_feature_gated_dps_batched(mock_channel):
 
     # Pre-populate cache with START params so _get_start_params() doesn't
     # issue an extra query that would distort the count.
-    with patch(
-        "roborock.devices.traits.a01.send_decoded_command", new_callable=AsyncMock, side_effect=_side_effect
-    ), patch(
-        "roborock.devices.traits.a01.device_features.send_decoded_command",
-        new_callable=AsyncMock,
-        side_effect=_side_effect,
+    with (
+        patch("roborock.devices.traits.a01.send_decoded_command", new_callable=AsyncMock, side_effect=_side_effect),
+        patch(
+            "roborock.devices.traits.a01.device_features.send_decoded_command",
+            new_callable=AsyncMock,
+            side_effect=_side_effect,
+        ),
     ):
         api = ZeoApi(mock_channel)
         # Seed the DPS cache with required START params so only FEATURE_BITS
         # and feature-gated queries are counted.
-        api._dps_cache.update({
-            int(RoborockZeoProtocol.MODE): 1,
-            int(RoborockZeoProtocol.PROGRAM): 1,
-            int(RoborockZeoProtocol.TEMP): 30,
-            int(RoborockZeoProtocol.RINSE_TIMES): 2,
-            int(RoborockZeoProtocol.SPIN_LEVEL): 800,
-            int(RoborockZeoProtocol.DRYING_MODE): 1,
-        })
+        api._dps_cache.update(
+            {
+                int(RoborockZeoProtocol.MODE): 1,
+                int(RoborockZeoProtocol.PROGRAM): 1,
+                int(RoborockZeoProtocol.TEMP): 30,
+                int(RoborockZeoProtocol.RINSE_TIMES): 2,
+                int(RoborockZeoProtocol.SPIN_LEVEL): 800,
+                int(RoborockZeoProtocol.DRYING_MODE): 1,
+            }
+        )
         await api.start()
 
     # FEATURE_BITS query (1) + batch gated-DP query (1) + SET (1) = 3 total calls.

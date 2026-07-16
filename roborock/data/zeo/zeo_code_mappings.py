@@ -60,7 +60,7 @@ class ZeoMode(RoborockEnum):
 
 
 class ZeoState(RoborockEnum):
-    standby = 1  # Standy
+    standby = 1
     weighing = 2  # Checking
     soaking = 3
     washing = 4
@@ -210,7 +210,7 @@ class ZeoDetergentExpansionType(RoborockEnum):
 class ZeoSoftenerExpansionType(RoborockEnum):
     softener = 1
     softener_expansion = 2
-    wool_detergent = 3 
+    wool_detergent = 3
 
 
 class ZeoDirtDetectionStatus(RoborockEnum):
@@ -318,11 +318,3 @@ class ZeoDryerStartError(RoborockEnum):
 # class SmartHostStatus(RoborockEnum):
 #     smart_host_waiting = 0
 #     smart_hosting = 1
-
-
-
-
-
-
-
-
