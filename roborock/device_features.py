@@ -863,3 +863,44 @@ def is_wash_n_fill_dock(dock_type: RoborockDockTypeCode) -> bool:
 def is_valid_dock(dock_type: RoborockDockTypeCode) -> bool:
     """Check if device supports a dock."""
     return RoborockDockFeatures.from_dock_type(dock_type).has_dock
+
+
+@dataclass
+class ZeoFeatures:
+    """Device capability flags for Zeo devices, parsed from DP 237 (FEATURE_BITS)."""
+
+    adapted_custom_program: bool = False
+    concentrated_detergent: bool = False
+    deep_self_clean: bool = False
+    detect_door_status: bool = False
+    dirt_detection: bool = False
+    dry_care: bool = False
+    expand_softener: bool = False
+    fluff_clean_notification: bool = False
+    ion_deodorization: bool = False
+    new_custom_program: bool = False
+    power_button_indicator_light: bool = False
+    save_panel_program_params: bool = False
+    set_params_in_working: bool = False
+    set_uvc_in_appointment: bool = False
+    set_uvc_in_pause: bool = False
+    silent_mode: bool = False
+    smart_hosting: bool = False
+    smile_light: bool = False
+    steam_care: bool = False
+    thirty_min_soak: bool = False
+    voice_assistant: bool = False
+    voice_assistant_record: bool = False
+    wash_dry_linkage: bool = False
+    wool_detergent: bool = False
+
+    @classmethod
+    def from_feature_bits(cls, raw: int) -> "ZeoFeatures":
+        """Return a new instance from a raw feature bits value."""
+        from roborock.data.zeo.zeo_code_mappings import ZeoFeatureBits
+
+        kwargs: dict[str, bool] = {}
+        for f in fields(cls):
+            bit_pos = getattr(ZeoFeatureBits, f.name)
+            kwargs[f.name] = bool(raw & (1 << int(bit_pos)))
+        return cls(**kwargs)
