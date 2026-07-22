@@ -690,6 +690,7 @@ _CLEAN_FLUID_AUTO_DELIVERY_AM_DOCK_TYPES = {
     RoborockDockTypeCode.shell_e_dock,
     RoborockDockTypeCode.shell_2e_dock,
     RoborockDockTypeCode.shell_3c_dock,
+    RoborockDockTypeCode.type_31_dock,
 }
 
 _AUTO_STERILIZE_DOCK_TYPES = {
@@ -739,6 +740,7 @@ _WATER_UPDOWN_DRAIN_AM_DOCK_TYPES = {
     RoborockDockTypeCode.shell_e_dock,
     RoborockDockTypeCode.shell_2e_dock,
     RoborockDockTypeCode.shell_3c_dock,
+    RoborockDockTypeCode.type_31_dock,
 }
 
 _HATCH_DOOR_DOCK_COOL_FAN_DOCK_TYPES = {
@@ -747,6 +749,7 @@ _HATCH_DOOR_DOCK_COOL_FAN_DOCK_TYPES = {
 
 _SPECIAL_WASH_TEMP_DOCK_TYPES = {
     RoborockDockTypeCode.shell_2e_lite_dock,
+    RoborockDockTypeCode.type_31_dock,
 }
 
 
