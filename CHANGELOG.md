@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v5.36.0 (2026-07-21)
+
+### Features
+
+- Add MQTT QoS support and timestamp to A01 protocol payload
+  ([#891](https://github.com/Python-roborock/python-roborock/pull/891),
+  [`3deed81`](https://github.com/Python-roborock/python-roborock/commit/3deed815a886ee6844054abfad372886a536d681))
+
+
+## v5.35.0 (2026-07-21)
+
+### Features
+
+- Compose Q10 map content from grouped traits
+  ([#887](https://github.com/Python-roborock/python-roborock/pull/887),
+  [`a66e7c3`](https://github.com/Python-roborock/python-roborock/commit/a66e7c37dadf50d472b7d24c4a0c960c0efea771))
+
+### Refactoring
+
+- Simplify Q10 map trait state ([#887](https://github.com/Python-roborock/python-roborock/pull/887),
+  [`a66e7c3`](https://github.com/Python-roborock/python-roborock/commit/a66e7c37dadf50d472b7d24c4a0c960c0efea771))
+
+- Tighten Q10 map trait lifecycle
+  ([#887](https://github.com/Python-roborock/python-roborock/pull/887),
+  [`a66e7c3`](https://github.com/Python-roborock/python-roborock/commit/a66e7c37dadf50d472b7d24c4a0c960c0efea771))
+
+
 ## v5.34.0 (2026-07-20)
 
 ### Chores
