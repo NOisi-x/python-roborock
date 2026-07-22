@@ -38,16 +38,24 @@ from roborock.data.dyad.dyad_code_mappings import (
     RoborockDyadStateCode,
 )
 from roborock.data.zeo.zeo_code_mappings import (
+    ZeoDetergentExpansionType,
     ZeoDetergentType,
+    ZeoDirtDetectionStatus,
+    ZeoDryAndCare,
+    ZeoDryerStartError,
+    ZeoDryingMethod,
     ZeoDryingMode,
     ZeoError,
     ZeoFeatureBits,
     ZeoMode,
     ZeoProgram,
     ZeoRinse,
+    ZeoSoak,
+    ZeoSoftenerExpansionType,
     ZeoSoftenerType,
     ZeoSpin,
     ZeoState,
+    ZeoSteamVolume,
     ZeoTemperature,
 )
 from roborock.devices.rpc.a01_channel import send_decoded_command
@@ -63,11 +71,16 @@ from roborock.roborock_message import (
     RoborockZeoProtocol,
 )
 
+from .command import ZeoCommandTrait  # noqa: F401 — re‑export
+from .device_features import ZeoFeatures, ZeoFeatureTrait  # noqa: F401 — re‑export
+
 _LOGGER = logging.getLogger(__name__)
 
 __init__ = [
     "DyadApi",
     "ZeoApi",
+    "ZeoCommandTrait",
+    "ZeoFeatureTrait",
 ]
 
 
@@ -104,6 +117,17 @@ DYAD_PROTOCOL_ENTRIES: dict[RoborockDyadDataProtocol, Callable] = {
     RoborockDyadDataProtocol.PRODUCT_INFO: lambda val: DyadProductInfo.from_dict(val),
 }
 
+
+def _try_json(val: Any) -> Any:
+    """Return *val* parsed as JSON when it is a JSON string, else *val*."""
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return val
+
+
 ZEO_PROTOCOL_ENTRIES: dict[RoborockZeoProtocol, Callable] = {
     # read-only
     RoborockZeoProtocol.STATE: lambda val: ZeoState(val).name,
@@ -113,6 +137,27 @@ ZEO_PROTOCOL_ENTRIES: dict[RoborockZeoProtocol, Callable] = {
     RoborockZeoProtocol.TIMES_AFTER_CLEAN: lambda val: int(val),
     RoborockZeoProtocol.DETERGENT_EMPTY: lambda val: bool(val),
     RoborockZeoProtocol.SOFTENER_EMPTY: lambda val: bool(val),
+    RoborockZeoProtocol.DIRT_DETECTION_STATUS: lambda val: ZeoDirtDetectionStatus(val).name,
+    RoborockZeoProtocol.TOTAL_TIME: lambda val: int(val),
+    RoborockZeoProtocol.FEATURE_BITS: lambda val: int(val),
+    RoborockZeoProtocol.SMART_HOSTING_WAITED_TIME: lambda val: int(val),
+    RoborockZeoProtocol.IS_NEED_FLUFF_CLEAN: lambda val: bool(val),
+    RoborockZeoProtocol.PANEL_PROGRAM_PARAMS_SET_RESULT: lambda val: int(val),
+    RoborockZeoProtocol.DEVICE_BOUND: lambda val: bool(val),
+    RoborockZeoProtocol.CLOTH_PUT_IN: lambda val: bool(val),
+    RoborockZeoProtocol.CLOTH_READY_TO_DRY_COUNT_DOWN: lambda val: int(val),
+    RoborockZeoProtocol.START_DRYER_ERROR: lambda val: ZeoDryerStartError(val).name,
+    RoborockZeoProtocol.DOORLOCK_STATE: lambda val: bool(val),
+    RoborockZeoProtocol.APP_AUTHORIZATION: lambda val: bool(val),
+    RoborockZeoProtocol.SMART_HOSTING_TIME: lambda val: int(val),
+    RoborockZeoProtocol.CUSTOM_PROGRAM_CLEANING_TIME: lambda val: int(val),
+    RoborockZeoProtocol.PANEL_TIMING_PROGRAM_PARAMS: lambda val: int(val),
+    RoborockZeoProtocol.STEAM_CARE_TIME: lambda val: int(val),
+    # meta — read-only (JSON)
+    RoborockZeoProtocol.PRODUCT_INFO: lambda val: _try_json(val),
+    RoborockZeoProtocol.WASHING_LOG: lambda val: _try_json(val),
+    RoborockZeoProtocol.VOICE_RECORD_INFO: lambda val: _try_json(val),
+    RoborockZeoProtocol.VOICE_RECORD: lambda val: _try_json(val),
     # read-write
     RoborockZeoProtocol.MODE: lambda val: ZeoMode(val).name,
     RoborockZeoProtocol.PROGRAM: lambda val: ZeoProgram(val).name,
@@ -123,6 +168,41 @@ ZEO_PROTOCOL_ENTRIES: dict[RoborockZeoProtocol, Callable] = {
     RoborockZeoProtocol.DETERGENT_TYPE: lambda val: ZeoDetergentType(val).name,
     RoborockZeoProtocol.SOFTENER_TYPE: lambda val: ZeoSoftenerType(val).name,
     RoborockZeoProtocol.SOUND_SET: lambda val: bool(val),
+    RoborockZeoProtocol.DIRT_DETECTION_SWITCH: lambda val: bool(val),
+    RoborockZeoProtocol.SOAK: lambda val: ZeoSoak(val).name,
+    RoborockZeoProtocol.SILENT_MODE_ON: lambda val: bool(val),
+    RoborockZeoProtocol.SILENT_MODE_START_TIME: lambda val: int(val),
+    RoborockZeoProtocol.SILENT_MODE_END_TIME: lambda val: int(val),
+    RoborockZeoProtocol.DRY_CARE_MODE: lambda val: ZeoDryAndCare(val).name,
+    RoborockZeoProtocol.WASH_DRY_LINKED: lambda val: bool(val),
+    RoborockZeoProtocol.DRYING_METHOD: lambda val: ZeoDryingMethod(val).name,
+    RoborockZeoProtocol.STEAM_VOLUME: lambda val: ZeoSteamVolume(val).name,
+    RoborockZeoProtocol.ION_DEODORIZATION: lambda val: bool(val),
+    RoborockZeoProtocol.UV_LIGHT: lambda val: bool(val),
+    RoborockZeoProtocol.SMART_HOSTING: lambda val: bool(val),
+    RoborockZeoProtocol.SOFTENER_EXPANSION_TYPE: lambda val: ZeoSoftenerExpansionType(val).name,
+    RoborockZeoProtocol.DETERGENT_EXPANSION_TYPE: lambda val: ZeoDetergentExpansionType(val).name,
+    RoborockZeoProtocol.SMILE_LIGHT_STATUS: lambda val: bool(val),
+    RoborockZeoProtocol.POWER_LIGHT: lambda val: bool(val),
+    RoborockZeoProtocol.PANEL_PROGRAM_PARAMS_SET: lambda val: int(val),
+    RoborockZeoProtocol.WIFI_LINKAGE_RESET: lambda val: int(val),
+    RoborockZeoProtocol.SAVE_ADAPTED_CLOUD_PROGRAM: lambda val: int(val),
+    RoborockZeoProtocol.CHILD_LOCK: lambda val: bool(val),
+    RoborockZeoProtocol.DETERGENT_SET: lambda val: bool(val),
+    RoborockZeoProtocol.SOFTENER_SET: lambda val: bool(val),
+    RoborockZeoProtocol.FLUFF_CLEANED: lambda val: bool(val),
+    # read-write (int-valued)
+    RoborockZeoProtocol.CUSTOM_PARAM_SAVE: lambda val: int(val),
+    RoborockZeoProtocol.CUSTOM_PARAM_GET: lambda val: int(val),
+    RoborockZeoProtocol.DEFAULT_SETTING: lambda val: int(val),
+    RoborockZeoProtocol.LIGHT_SETTING: lambda val: bool(val),
+    RoborockZeoProtocol.DETERGENT_VOLUME: lambda val: int(val),
+    RoborockZeoProtocol.SOFTENER_VOLUME: lambda val: int(val),
+    # meta — read-write
+    RoborockZeoProtocol.SET_SOUND_PACKAGE: lambda val: val,
+    RoborockZeoProtocol.VOICE_VOLUME: lambda val: val,
+    RoborockZeoProtocol.VOICE_SWITCH: lambda val: bool(val),
+    RoborockZeoProtocol.VOICE_RECORD_DELETE: lambda val: int(val),
 }
 
 
@@ -173,20 +253,30 @@ class ZeoApi(Trait, TraitUpdateListener):
 
     name = "zeo"
 
-    def __init__(self, channel: MqttChannel) -> None:
+    def __init__(self, channel: MqttChannel, product_id: str | None = None) -> None:
         """Initialize the Zeo API."""
         TraitUpdateListener.__init__(self, _LOGGER)
         self._channel = channel
         self._dps_cache: dict[int, Any] = {}
         self._dps_unsub: Callable[[], None] | None = None
         self._feature_bits: int = 0
+        self._feature_trait = ZeoFeatureTrait(channel, product_id)
+        self._command: ZeoCommandTrait | None = None
+
+    @property
+    def command(self) -> ZeoCommandTrait:
+        """Lazily-built trait for wash-programme commands."""
+        if self._command is None:
+            self._command = ZeoCommandTrait(
+                channel=self._channel,
+                dps_cache=self._dps_cache,
+                feature_trait=self._feature_trait,
+                proto_entries=ZEO_PROTOCOL_ENTRIES,
+            )
+        return self._command
 
     async def start(self) -> None:
-        """Subscribe to MQTT push and discover device features.
-
-        Subscribes to the DPS MQTT topic, then queries FEATURE_BITS
-        (DP 237) to wake the device and cache supported capabilities.
-        """
+        """Subscribe to MQTT push and discover device capabilities."""
         await self._ensure_subscribed()
         await self._discover_features()
 
@@ -203,13 +293,7 @@ class ZeoApi(Trait, TraitUpdateListener):
         self._dps_unsub = await self._channel.subscribe(self._on_dps_message)
 
     async def _discover_features(self) -> None:
-        """Query FEATURE_BITS to wake the device and cache capabilities.
-
-        Sending an RPC query after subscribing triggers the device to
-        start pushing its full state — equivalent to how V1's
-        ``discover_features()`` uses ``device_features.refresh()`` to
-        initiate the push cycle.
-        """
+        """Query FEATURE_BITS (DP 237) and cache device capabilities."""
         try:
             result = await self.query_values([RoborockZeoProtocol.FEATURE_BITS])
             self._feature_bits = result.get(RoborockZeoProtocol.FEATURE_BITS, 0)
@@ -261,6 +345,6 @@ def create(product: HomeDataProduct, mqtt_channel: MqttChannel) -> DyadApi | Zeo
         case RoborockCategory.WET_DRY_VAC:
             return DyadApi(mqtt_channel)
         case RoborockCategory.WASHING_MACHINE:
-            return ZeoApi(mqtt_channel)
+            return ZeoApi(mqtt_channel, product_id=product.id)
         case _:
             raise NotImplementedError(f"Unsupported category {product.category}")

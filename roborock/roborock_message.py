@@ -184,6 +184,7 @@ class RoborockZeoProtocol(RoborockEnum):
     )
     DRY_CARE_MODE = 244  # rw  [startWith]
     SOFTENER_EXPANSION_TYPE = 245  # rw  [independent]
+    UNKNOWN_246 = 246  # not found in bundle
     SMILE_LIGHT_STATUS = 247  # rw  [independent]
     DETERGENT_EXPANSION_TYPE = 248  # rw  [independent]
     FLUFF_CLEANED = 249  # rw  [independent]
@@ -196,6 +197,7 @@ class RoborockZeoProtocol(RoborockEnum):
     DRYING_METHOD = 256  # rw  [startWith]
     STEAM_VOLUME = 257  # rw  [startWith]
     ION_DEODORIZATION = 258  # rw  [startWith / feature-gated]
+    UNKNOWN_259 = 259  # not found in bundle
     PANEL_TIMING_PROGRAM_PARAMS = 260  # ro
     STEAM_CARE_TIME = 261  # ro
     DEVICE_BOUND = 262  # ro

@@ -19,19 +19,30 @@ from .zeo_code_mappings import (
 
 @dataclass
 class ZeoStartParams(RoborockBase):
-    """Parameters that must be bundled with a START command.
+    """All parameters that may be bundled with a START command.
 
-    All Zeo devices require ``mode`` and ``program`` to be sent together
-    with the start signal. The remaining fields are optional and only
-    included when the device reports a non-None value.
+    ``mode`` and ``program`` are mandatory for every device.  Every other
+    field is optional — when ``None`` it is simply omitted from the MQTT
+    payload, so the same superset works for washers and dryers alike.
     """
 
     mode: ZeoMode
     program: ZeoProgram
+
+    # Washer
     temperature: ZeoTemperature | None = None
     rinse: ZeoRinse | None = None
     spin: ZeoSpin | None = None
     drying_mode: ZeoDryingMode | None = None
+
+    # Dryer
+    drying_method: ZeoDryingMethod | None = None
+    steam_volume: ZeoSteamVolume | None = None
+    total_time: int | None = None
+
+    # Optional across both device families
+    soak: ZeoSoak | None = None
+    dry_and_care: ZeoDryAndCare | None = None
 
 
 # ── DP 222 (LoadCloudProgram) bitfield decoder ──────────────────────────
